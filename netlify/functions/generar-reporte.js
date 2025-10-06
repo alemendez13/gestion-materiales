@@ -1,6 +1,10 @@
-const { google } = require('googleapis');
+// RUTA: netlify/functions/generar-reporte.js
 
-// (Puedes mover esta función a un archivo compartido en el futuro)
+const { google } = require('googleapis');
+// Asegúrate de que la ruta a tu nuevo archivo de utilidades sea correcta
+const { getUserRole } = require('./utils/auth'); 
+
+// Esta función se mantiene igual que en tu código original
 const getAuth = () => new google.auth.GoogleAuth({
     credentials: {
         client_email: process.env.GOOGLE_CLIENT_EMAIL,
@@ -10,42 +14,52 @@ const getAuth = () => new google.auth.GoogleAuth({
 });
 
 exports.handler = async (event, context) => {
-    // Seguridad: Solo los admins pueden acceder
-    const { user } = context.clientContext;
-    if (!user || !user.app_metadata.roles?.includes('admin')) {
-        return { statusCode: 403, body: JSON.stringify({ error: 'Acceso denegado.' }) };
+    // --- INICIO DEL NUEVO BLOQUE DE SEGURIDAD ---
+
+    // 1. Verificamos que un usuario haya iniciado sesión.
+    const user = context.clientContext && context.clientContext.user;
+    if (!user) {
+        return { statusCode: 401, body: JSON.stringify({ error: 'Acceso no autorizado. Debes iniciar sesión.' }) };
     }
 
+    // 2. Consultamos el rol del usuario en Google Sheets usando su email.
+    const userRole = await getUserRole(user.email);
+    
+    // 3. Verificamos si el rol obtenido es 'admin'.
+    if (userRole !== 'admin') {
+        return { statusCode: 403, body: JSON.stringify({ error: 'Acceso denegado. No tienes permisos de administrador.' }) };
+    }
+    // --- FIN DEL NUEVO BLOQUE DE SEGURIDAD ---
+
     try {
+        // --- LA LÓGICA PARA GENERAR EL REPORTE NO CAMBIA ---
         const auth = getAuth();
         const sheets = google.sheets({ version: 'v4', auth });
 
-        // 1. Leer Catálogo y Movimientos al mismo tiempo
         const [catalogRes, movementsRes] = await Promise.all([
             sheets.spreadsheets.values.get({ spreadsheetId: process.env.GOOGLE_SHEET_ID, range: 'CATALOGO_INSUMOS!A:G' }),
             sheets.spreadsheets.values.get({ spreadsheetId: process.env.GOOGLE_SHEET_ID, range: 'MOVIMIENTOS!A:F' })
         ]);
 
-        const catalogRows = catalogRes.data.values || [];
-        const movementRows = movementsRes.data.values || [];
+        const catalogRows = (catalogRes.data.values || []).slice(1);
+        const movementRows = (movementsRes.data.values || []).slice(1);
 
-        if (catalogRows.length < 2) return { statusCode: 200, body: JSON.stringify({ totalInventoryValue: 0, lowStockItems: [] }) };
-
-        // 2. Procesar los datos
+        if (catalogRows.length === 0) {
+            return { statusCode: 200, body: JSON.stringify({ totalInventoryValue: 0, lowStockItems: [] }) };
+        }
+        
         const stockMap = {};
         const costMap = {};
         
-        movementRows.slice(1).forEach(mov => {
+        movementRows.forEach(mov => {
             const itemId = mov[2];
             const type = mov[3];
             const quantity = Number(mov[4]);
             const cost = Number(mov[5]);
 
-            // Calcular stock actual
             if (!stockMap[itemId]) stockMap[itemId] = 0;
-            stockMap[itemId] += quantity; // Las salidas ya son negativas
+            stockMap[itemId] += quantity;
 
-            // Guardar el costo más reciente de cada producto
             if (type === 'Entrada') {
                 costMap[itemId] = cost;
             }
@@ -54,7 +68,7 @@ exports.handler = async (event, context) => {
         let totalInventoryValue = 0;
         const lowStockItems = [];
 
-        catalogRows.slice(1).forEach(item => {
+        catalogRows.forEach(item => {
             const id = item[0];
             const name = item[2];
             const minStock = Number(item[6]) || 0;
@@ -69,7 +83,6 @@ exports.handler = async (event, context) => {
             }
         });
 
-        // 3. Devolver el reporte
         return { 
             statusCode: 200, 
             body: JSON.stringify({ totalInventoryValue, lowStockItems }) 

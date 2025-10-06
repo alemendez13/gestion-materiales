@@ -1,5 +1,10 @@
-const { google } = require('googleapis');
+// RUTA: netlify/functions/crear-insumo.js
 
+const { google } = require('googleapis');
+// Asegúrate de que la ruta a tu nuevo archivo de utilidades sea correcta
+const { getUserRole } = require('./utils/auth');
+
+// Esta función auxiliar para la autenticación se mantiene igual
 const getAuth = () => new google.auth.GoogleAuth({
     credentials: {
         client_email: process.env.GOOGLE_CLIENT_EMAIL,
@@ -9,20 +14,31 @@ const getAuth = () => new google.auth.GoogleAuth({
 });
 
 exports.handler = async (event, context) => {
-    // Seguridad: Solo los admins pueden acceder
-    const { user } = context.clientContext;
-    if (!user || !user.app_metadata.roles?.includes('admin')) {
-        return { statusCode: 403, body: JSON.stringify({ error: 'Acceso denegado.' }) };
+    // --- INICIO DEL NUEVO BLOQUE DE SEGURIDAD ---
+
+    // 1. Verificamos que un usuario haya iniciado sesión.
+    const user = context.clientContext && context.clientContext.user;
+    if (!user) {
+        return { statusCode: 401, body: JSON.stringify({ error: 'Acceso no autorizado. Debes iniciar sesión.' }) };
     }
+
+    // 2. Consultamos el rol del usuario en Google Sheets.
+    const userRole = await getUserRole(user.email);
+    
+    // 3. Verificamos si el rol es 'admin'.
+    if (userRole !== 'admin') {
+        return { statusCode: 403, body: JSON.stringify({ error: 'Acceso denegado. No tienes permisos de administrador.' }) };
+    }
+    // --- FIN DEL NUEVO BLOQUE DE SEGURIDAD ---
 
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' };
     }
 
     try {
+        // --- LA LÓGICA PARA CREAR EL INSUMO NO CAMBIA ---
         const item = JSON.parse(event.body);
 
-        // Validación simple
         if (!item.sku || !item.name || !item.family) {
             return { statusCode: 400, body: JSON.stringify({ error: 'SKU, Nombre y Familia son obligatorios.' }) };
         }
@@ -32,15 +48,13 @@ exports.handler = async (event, context) => {
         
         const newItemId = 'INS-' + new Date().getTime();
 
-        // Añadir la nueva fila al catálogo
         await sheets.spreadsheets.values.append({
             spreadsheetId: process.env.GOOGLE_SHEET_ID,
             range: 'CATALOGO_INSUMOS!A1',
             valueInputOption: 'USER_ENTERED',
             resource: {
                 values: [
-                    // El orden debe coincidir con tus columnas en CATALOGO_INSUMOS
-                    [newItemId, item.sku, item.name, item.description, item.family, item.unit, item.minStock, item.maxStock, item.location, 'Activo']
+                    [newItemId, item.sku, item.name, item.description, item.family, item.unit, item.minStock, item.maxStock, item.location, 'Activo', '', item.serialNumber]
                 ],
             },
         });
