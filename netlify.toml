@@ -1,0 +1,9 @@
+[build]
+  # Directorio que se publicará en la web.
+  publish = "public"
+  # Directorio donde Netlify buscará las funciones serverless.
+  functions = "netlify/functions"
+
+[dev]
+  # Puerto para el servidor de desarrollo local.
+  port = 9999
