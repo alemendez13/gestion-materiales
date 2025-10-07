@@ -1,8 +1,8 @@
 // RUTA: netlify/functions/crear-insumo.js
 
 const { google } = require('googleapis');
-// Asegúrate de que la ruta a tu nuevo archivo de utilidades sea correcta
-const { getUserRole } = require('./utils/auth');
+// Importar auth.js (asumiendo que está en una ruta relativa)
+const { getUserRole } = require('./auth');
 
 // Esta función auxiliar para la autenticación se mantiene igual
 const getAuth = () => new google.auth.GoogleAuth({
@@ -14,30 +14,38 @@ const getAuth = () => new google.auth.GoogleAuth({
 });
 
 exports.handler = async (event, context) => {
-    // --- INICIO DEL NUEVO BLOQUE DE SEGURIDAD ---
-
-    // 1. Verificamos que un usuario haya iniciado sesión.
-    const user = context.clientContext && context.clientContext.user;
-    if (!user) {
-        return { statusCode: 401, body: JSON.stringify({ error: 'Acceso no autorizado. Debes iniciar sesión.' }) };
-    }
-
-    // 2. Consultamos el rol del usuario en Google Sheets.
-    const userRole = await getUserRole(user.email);
     
-    // 3. Verificamos si el rol es 'admin'.
-    if (userRole !== 'admin') {
-        return { statusCode: 403, body: JSON.stringify({ error: 'Acceso denegado. No tienes permisos de administrador.' }) };
-    }
-    // --- FIN DEL NUEVO BLOQUE DE SEGURIDAD ---
-
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' };
     }
 
-    try {
-        // --- LA LÓGICA PARA CREAR EL INSUMO NO CAMBIA ---
+
+    // --- BLOQUE DE SEGURIDAD (API KEY + GSHEETS ROLE) ---
+
+    // 1. Validar la Clave de API
+    const apiKey = event.headers['x-api-key'];
+    if (apiKey !== process.env.APP_API_KEY) {
+        return { statusCode: 403, body: JSON.stringify({ error: 'Acceso denegado. Clave de API inválida.' }) };
+    }
+    
+    // El 'try' debe comenzar AQUÍ para manejar la decodificación del JSON y la lógica de negocio
+    try { 
         const item = JSON.parse(event.body);
+
+        // Validar que el email venga en el body
+        const userEmail = item.userEmail;
+        if (!userEmail) {
+            return { statusCode: 401, body: JSON.stringify({ error: 'Email del usuario faltante en la solicitud.' }) };
+        }
+
+        // 2. Validar el Rol del Usuario en Google Sheets
+        const userRole = await getUserRole(userEmail);
+        
+        if (userRole !== 'admin') {
+            return { statusCode: 403, body: JSON.stringify({ error: 'Acceso denegado. No tienes permisos de administrador.' }) };
+        }
+    
+        // --- LA LÓGICA PARA CREAR EL INSUMO NO CAMBIA ---
 
         if (!item.sku || !item.name || !item.family) {
             return { statusCode: 400, body: JSON.stringify({ error: 'SKU, Nombre y Familia son obligatorios.' }) };

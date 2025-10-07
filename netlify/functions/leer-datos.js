@@ -14,15 +14,37 @@ const getAuth = () => {
 };
 
 exports.handler = async (event, context) => {
-    // --- INICIO DEL NUEVO BLOQUE DE SEGURIDAD Y LÓGICA MEJORADA ---
+    
+    if (event.httpMethod !== 'POST') {
+        return { statusCode: 405, body: 'Method Not Allowed' };
+    }
 
-    // 1. Verificamos que un usuario haya iniciado sesión.
-    const user = context.clientContext && context.clientContext.user;
-    if (!user) {
-        return { statusCode: 401, body: JSON.stringify({ error: 'Acceso no autorizado. Debes iniciar sesión.' }) };
+    // --- INICIO DEL NUEVO BLOQUE DE SEGURIDAD (API KEY + GSHEETS ROLE) ---
+
+    // 1. Validar la Clave de API enviada en el Header 'x-api-key'
+    const apiKey = event.headers['x-api-key'];
+    if (apiKey !== process.env.APP_API_KEY) {
+        return { statusCode: 403, body: JSON.stringify({ error: 'Acceso denegado. Clave de API inválida.' }) };
     }
 
     try {
+        const item = JSON.parse(event.body);
+
+        // NOTA: El email del usuario debe ser enviado por el frontend en el cuerpo de la solicitud
+        const userEmail = item.userEmail;
+        if (!userEmail) {
+            return { statusCode: 401, body: JSON.stringify({ error: 'Email del usuario faltante en la solicitud.' }) };
+        }
+
+        // 2. Validar el Rol del Usuario en Google Sheets
+        const userRole = await getUserRole(userEmail);
+        
+        if (userRole !== 'admin') {
+            return { statusCode: 403, body: JSON.stringify({ error: 'Acceso denegado. No tienes permisos de administrador.' }) };
+        }
+        
+        // --- FIN DEL NUEVO BLOQUE DE SEGURIDAD ---
+
         const auth = getAuth();
         const sheets = google.sheets({ version: 'v4', auth });
 
