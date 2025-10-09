@@ -10,9 +10,12 @@ const getAuthClient = () => {
     });
 };
 
-// CÓDIGO CORREGIDO
 exports.getUserRole = async (userEmail) => {
+    // --- LOG 1: Punto de Entrada ---
+    console.log(`--- Iniciando auth.js para el email: ${userEmail} ---`);
+    
     if (!userEmail) {
+        console.log('Error: El email recibido es nulo o indefinido.');
         return null;
     }
 
@@ -25,20 +28,29 @@ exports.getUserRole = async (userEmail) => {
             range: 'USUARIOS!A:C', 
         });
 
+        // --- LOG 2: Respuesta Cruda de Google Sheets ---
+        console.log('Respuesta de Google Sheets API:', JSON.stringify(response.data.values, null, 2));
+
         const users = response.data.values || [];
-        if (users.length === 0) return null;
+        if (users.length > 0) {
+            users.shift(); // Quitar encabezados
+        }
 
-        const headers = users.shift(); // Quitar encabezados
+        const userRow = users.find(row => row && row[0] && row[0].trim().toLowerCase() === userEmail.trim().toLowerCase());
 
-// CÓDIGO CORREGIDO
-const userRow = users.find(row => row[0] && row[0].trim().toLowerCase() === userEmail.trim().toLowerCase());
+        // --- LOG 3: Fila de Usuario Encontrada ---
+        console.log('Fila de usuario encontrada:', userRow);
+        
+        const role = userRow ? userRow[2].trim().toLowerCase() : null;
 
-        return userRow ? userRow[2].trim().toLowerCase() : null;
+        // --- LOG 4: Rol Final Extraído ---
+        console.log(`Rol extraído: ${role}`);
+        
+        return role;
 
     } catch (error) {
+        // --- LOG 5: Error en la Ejecución ---
         console.error('Error Crítico en auth.js al conectar con Google Sheets:', error);
         return null;
     }
 };
-// Nota: El archivo se ha simplificado para exportar directamente la función getUserRole.
-// El archivo get-user-profile.js debe ajustarse para llamar a require('./utils/auth') directamente.
