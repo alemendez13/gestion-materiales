@@ -1,4 +1,4 @@
-// RUTA: netlify/functions/crear-insumo.js (MODIFICADO para Plan 2)
+// RUTA: netlify/functions/actualizar solicitudes.js (MODIFICADO para Plan 2)
 
 const { google } = require('googleapis');
 // Importar auth.js (asumiendo que está en una ruta relativa)
@@ -74,9 +74,10 @@ exports.handler = async (event, context) => {
                 range: 'MOVIMIENTOS!A1',
                 valueInputOption: 'USER_ENTERED',
                 resource: {
-                    values: [
-                        ['MOV-' + new Date().getTime(), new Date().toISOString(), itemId, 'Salida', -Math.abs(quantity), '', '', '', '', '', '', approverEmail]
-                    ],
+// CÓDIGO CORREGIDO
+values: [
+    ['MOV-' + new Date().getTime(), new Date().toISOString(), itemId, 'Salida', Math.abs(quantity), '', '', '', '', '', '', approverEmail]
+],
                 },
             });
         }

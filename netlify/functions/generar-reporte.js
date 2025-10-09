@@ -1,6 +1,7 @@
-netlify/functions/actualizar-solicitud.js
+const { google } = require('googleapis');
+// Importar auth.js (asumiendo que está en una ruta relativa)
+const { getUserRole } = require('./auth');
 
-// Esta función se mantiene igual que en tu código original
 const getAuth = () => new google.auth.GoogleAuth({
     credentials: {
         client_email: process.env.GOOGLE_CLIENT_EMAIL,
@@ -15,18 +16,20 @@ exports.handler = async (event, context) => {
         return { statusCode: 405, body: 'Method Not Allowed' };
     }
 
-    // --- INICIO DEL NUEVO BLOQUE DE SEGURIDAD (API KEY + GSHEETS ROLE) ---
 
-    // 1. Validar la Clave de API enviada en el Header 'x-api-key'
+    // --- BLOQUE DE SEGURIDAD (API KEY + GSHEETS ROLE) ---
+
+    // 1. Validar la Clave de API
     const apiKey = event.headers['x-api-key'];
     if (apiKey !== process.env.APP_API_KEY) {
         return { statusCode: 403, body: JSON.stringify({ error: 'Acceso denegado. Clave de API inválida.' }) };
     }
-
-    try {
+    
+    // El 'try' debe comenzar AQUÍ para manejar la decodificación del JSON y la lógica de negocio
+    try { 
         const item = JSON.parse(event.body);
 
-        // NOTA: El email del usuario debe ser enviado por el frontend en el cuerpo de la solicitud
+        // Validar que el email venga en el body
         const userEmail = item.userEmail;
         if (!userEmail) {
             return { statusCode: 401, body: JSON.stringify({ error: 'Email del usuario faltante en la solicitud.' }) };
@@ -38,13 +41,15 @@ exports.handler = async (event, context) => {
         if (userRole !== 'admin') {
             return { statusCode: 403, body: JSON.stringify({ error: 'Acceso denegado. No tienes permisos de administrador.' }) };
         }
-        
-        // --- FIN DEL NUEVO BLOQUE DE SEGURIDAD ---
-        
-        // --- LA LÓGICA PARA GENERAR EL REPORTE NO CAMBIA ---
+
+
+    // --- FIN DEL BLOQUE CORREGIDO ---
+
+
         const auth = getAuth();
         const sheets = google.sheets({ version: 'v4', auth });
 
+        // 1. Leer Catálogo y Movimientos al mismo tiempo
         const [catalogRes, movementsRes] = await Promise.all([
             sheets.spreadsheets.values.get({ spreadsheetId: process.env.GOOGLE_SHEET_ID, range: 'CATALOGO_INSUMOS!A:G' }),
             sheets.spreadsheets.values.get({ spreadsheetId: process.env.GOOGLE_SHEET_ID, range: 'MOVIMIENTOS!A:F' })
@@ -53,25 +58,27 @@ exports.handler = async (event, context) => {
         const catalogRows = (catalogRes.data.values || []).slice(1);
         const movementRows = (movementsRes.data.values || []).slice(1);
 
-        if (catalogRows.length === 0) {
-            return { statusCode: 200, body: JSON.stringify({ totalInventoryValue: 0, lowStockItems: [] }) };
-        }
-        
+        if (catalogRows.length === 0) return { statusCode: 200, body: JSON.stringify({ totalInventoryValue: 0, lowStockItems: [] }) };
+
+        // 2. Procesar los datos
         const stockMap = {};
         const costMap = {};
         
-        movementRows.forEach(mov => {
-            const itemId = mov[2];
-            const type = mov[3];
-            const quantity = Number(mov[4]);
+// CÓDIGO CORREGIDO
+movementRows.forEach(mov => {
+    const itemId = mov[2];
+    const type = mov[3];
+    const quantity = Number(mov[4]);
             const cost = Number(mov[5]);
 
-            if (!stockMap[itemId]) stockMap[itemId] = 0;
-            stockMap[itemId] += quantity;
+    if (!stockMap[itemId]) stockMap[itemId] = 0;
 
-            if (type === 'Entrada') {
-                costMap[itemId] = cost;
-            }
+    // Lógica estandarizada: suma si es 'Entrada', resta si es 'Salida'
+    if (type === 'Entrada') {
+        stockMap[itemId] += quantity;
+    } else if (type === 'Salida') {
+        stockMap[itemId] -= quantity;
+    }
         });
 
         let totalInventoryValue = 0;
@@ -92,6 +99,7 @@ exports.handler = async (event, context) => {
             }
         });
 
+        // 3. Devolver el reporte
         return { 
             statusCode: 200, 
             body: JSON.stringify({ totalInventoryValue, lowStockItems }) 
