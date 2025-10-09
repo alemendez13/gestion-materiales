@@ -1,6 +1,8 @@
 // RUTA: netlify/functions/leer-catalogo.js
 
 const { google } = require('googleapis');
+// Importar auth.js (asumiendo que está en una ruta relativa)
+const { getUserRole } = require('./auth');
 
 // Esta función auxiliar se mantiene igual
 const getAuth = () => {
@@ -39,9 +41,10 @@ exports.handler = async (event, context) => {
         // 2. Validar el Rol del Usuario en Google Sheets
         const userRole = await getUserRole(userEmail);
         
-        if (userRole !== 'admin') {
-            return { statusCode: 403, body: JSON.stringify({ error: 'Acceso denegado. No tienes permisos de administrador.' }) };
-        }
+// CÓDIGO CORREGIDO
+if (!userRole) {
+    return { statusCode: 403, body: JSON.stringify({ error: 'Acceso denegado. Usuario no válido.' }) };
+}
         
         // --- FIN DEL NUEVO BLOQUE DE SEGURIDAD ---
 
