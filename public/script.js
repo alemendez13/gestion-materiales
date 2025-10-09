@@ -163,21 +163,20 @@ const fetchRole = async (email) => {
         setTimeout(() => toast.classList.add('hidden'), 3000);
     };
 
-// CÓDIGO MODIFICADO (con logs)
+// PEGAR ESTA NUEVA VERSIÓN
 const showView = (viewId) => {
-    // --- LOG 1: Ver qué vista se está solicitando ---
-    console.log(`Intentando mostrar la vista con ID: '${viewId}'`);
-    views.forEach(view => view.classList.add('hidden'));
+    // Oculta todas las vistas
+    views.forEach(view => {
+        view.style.display = 'none';
+    });
+
+    // Muestra solo la vista activa
     const activeView = document.getElementById(viewId);
-    // --- LOG 2: Verificar si se encontró el elemento HTML ---
-    console.log('Elemento encontrado:', activeView);
     if (activeView) {
-        activeView.classList.remove('hidden');
-        // --- LOG 3: Confirmar que se intentó mostrar ---
-        console.log(`Se ha removido la clase 'hidden' del elemento.`);
-    } else {
-        console.error(`¡ERROR! No se encontró ningún elemento con el id '${viewId}'.`);
+        activeView.style.display = 'block';
     }
+    
+    // Ilumina el enlace del menú correspondiente
     navLinks.forEach(link => {
         const parentLi = link.closest('li');
         parentLi.classList.toggle('bg-gray-200', link.dataset.view === viewId);
