@@ -1,10 +1,4 @@
 [build]
-  command = "sed -i 's|__APP_API_KEY__|'\"$APP_API_KEY\"'|g' public/index.html && sed -i 's|\"__APP_API_KEY__\"|\"'\"$APP_API_KEY\"'\"|g' public/script.js"
-  # Directorio que se publicará en la web.
+  command = "sed -i 's|__APP_API_KEY__|'\"$APP_API_KEY\"'|g' public/index.html"
   publish = "public"
-  # Directorio donde Netlify buscará las funciones serverless.
   functions = "netlify/functions"
-
-[dev]
-  # Puerto para el servidor de desarrollo local.
-  port = 9999
