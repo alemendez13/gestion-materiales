@@ -1,9 +1,14 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // --- INYECCIÓN DE CLAVE API Y EMAIL (FASE 2.A) ---
+    // La clave es inyectada globalmente por Netlify en index.html
+    const APP_API_KEY = window.APP_API_KEY_PUBLIC;
+    let userEmail = localStorage.getItem('userEmail') || null;
     // --- ESTADO DE LA APLICACIÓN ---
     let appState = {
         requests: [],
         catalog: [],
-        userProfile: null // Aquí guardaremos el rol del usuario obtenido del backend
+        // userProfile ya no se inicializa con Netlify Identity
+        userProfile: { role: window.USER_ROLE || null, email: userEmail }
     };
 
     // --- ELEMENTOS DEL DOM ---
@@ -43,33 +48,94 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+// --- LÓGICA DE OBTENCIÓN DE ROL (OPTIMIZADA) ---
+const fetchRole = async (email) => {
+    try {
+        // Realiza UNA ÚNICA llamada a la nueva función de backend.
+        const response = await fetch('/.netlify/functions/get-profile', {
+            method: 'POST',
+            headers: { 
+                'x-api-key': APP_API_KEY, 
+                'Content-Type': 'application/json' 
+            },
+            body: JSON.stringify({ userEmail: email })
+        });
+
+        // Si la respuesta no es exitosa (ej. 403, 404, 500), lanza un error.
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'No se pudo verificar el usuario.');
+        }
+
+        // Si es exitosa, extrae el rol del cuerpo de la respuesta.
+        const profile = await response.json();
+        return profile.role; // Devuelve directamente el rol (ej. 'admin' o 'user')
+
+    } catch (error) {
+        // Muestra el error en la consola y al usuario para mejor depuración.
+        console.error("Error al obtener el rol:", error.message);
+        showToast(error.message, true); // Opcional: notificar al usuario.
+        return null; 
+    }
+};
+
+    // --- LÓGICA DE LOGIN MANUAL (REEMPLAZO TOTAL DE NETLIFY IDENTITY) ---
+    const handleManualLogin = async () => {
+        let email = userEmail;
+        if (!email) {
+            email = prompt("Por favor, introduce tu email (para la validación del rol):");
+        }
+
+        if (email) {
+            email = email.trim().toLowerCase();
+            userEmail = email;
+            localStorage.setItem('userEmail', email);
+
+            // Cargar el rol antes de cargar la app
+            const role = await fetchRole(email);
+            appState.userProfile = { email: email, role: role || 'user' }; 
+            window.USER_ROLE = role || 'user';
+            
+            showAppForUser(appState.userProfile);
+            await initializeApp();
+            
+        } else {
+            alert("El email es necesario para iniciar la aplicación. Recarga la página para intentarlo.");
+        }
+    };
+
     // --- LÓGICA DE INICIALIZACIÓN DE LA APP ---
     const initializeApp = async () => {
         if (loader) loader.classList.remove('hidden');
         if (content) content.classList.add('hidden');
+
+        // --- ADAPTACIÓN AL PLAN 2 ---
+        if (!userEmail) { // Si userEmail es nulo, la app no ha iniciado sesión
+             handleManualLogin();
+             return; // Detener la inicialización si no hay email
+        }
         
         try {
-            const user = netlifyIdentity.currentUser();
-            if (!user) return;
-
-            const profileRes = await fetch('/.netlify/functions/get-user-profile', {
-                headers: { Authorization: `Bearer ${user.token.access_token}` }
-            });
-
-            if (!profileRes.ok) {
-                netlifyIdentity.logout();
-                throw new Error('No se pudo obtener el perfil de usuario.');
-            }
-            appState.userProfile = await profileRes.json();
-            
-            showAppForUser(appState.userProfile);
-            
+            // Reemplazamos las llamadas fetch con la seguridad API Key + Email en el body
             const [requestsRes, catalogRes] = await Promise.all([
-                fetch('/.netlify/functions/leer-datos', { headers: { Authorization: `Bearer ${user.token.access_token}` } }),
-                fetch('/.netlify/functions/leer-catalogo', { headers: { Authorization: `Bearer ${user.token.access_token}` } })
+                fetch('/.netlify/functions/leer-datos', { 
+                    method: 'POST',
+                    headers: { 'x-api-key': APP_API_KEY, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userEmail: userEmail }) // Adjuntamos el email para filtrar los datos
+                }),
+                fetch('/.netlify/functions/leer-catalogo', { 
+                    method: 'POST', // Usar POST para adjuntar la clave API es el estándar en tu proyecto
+                    headers: { 'x-api-key': APP_API_KEY, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userEmail: userEmail }) // Adjuntamos email aunque no filtre el catálogo, valida el acceso
+                })
             ]);
 
-            if (!requestsRes.ok || !catalogRes.ok) throw new Error('No se pudieron cargar los datos iniciales.');
+
+            if (!requestsRes.ok || !catalogRes.ok) {
+                // Si falla el acceso, podría ser la API Key o el email, el backend devuelve 403 o 401
+                const errorData = await requestsRes.json();
+                throw new Error(errorData.error || 'No se pudieron cargar los datos iniciales.');
+            }
             
             appState.requests = await requestsRes.json();
             appState.catalog = await catalogRes.json();
@@ -86,26 +152,6 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast(error.message, true);
         }
     };
-
-    // --- LÓGICA DE AUTENTICACIÓN ---
-    if (window.netlifyIdentity) {
-        netlifyIdentity.on('login', (user) => {
-            initializeApp();
-            netlifyIdentity.close();
-        });
-
-        netlifyIdentity.on('logout', () => {
-            const navUl = document.getElementById('main-nav');
-            if(navUl) navUl.classList.add('hidden');
-            if (mainContent) mainContent.classList.add('hidden');
-            window.location.reload();
-        });
-
-        if (netlifyIdentity.currentUser()) {
-            initializeApp();
-        }
-    }
-
     // --- FUNCIONES AUXILIARES Y DE RENDERIZADO (sin cambios) ---
     const showToast = (message, isError = false) => {
         const toast = document.getElementById('toast');
@@ -199,8 +245,11 @@ document.addEventListener('DOMContentLoaded', () => {
         totalValueEl.textContent = 'Calculando...';
         lowStockEl.innerHTML = '<p>Calculando...</p>';
         try {
-            const user = netlifyIdentity.currentUser();
-            const response = await fetch('/.netlify/functions/generar-reporte', { headers: { Authorization: `Bearer ${user.token.access_token}` } });
+            const response = await fetch('/.netlify/functions/generar-reporte', { 
+                method: 'POST', 
+                headers: { 'x-api-key': APP_API_KEY, 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ userEmail: userEmail }) 
+            });
             if (!response.ok) throw new Error('No se pudo generar el reporte.');
             const data = await response.json();
             totalValueEl.textContent = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(data.totalInventoryValue || 0);
@@ -223,13 +272,13 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             const submitButton = e.target.querySelector('button');
             submitButton.disabled = true;
-            const user = netlifyIdentity.currentUser();
             const payload = {
-                id: 'SOL-' + new Date().getTime(), timestamp: new Date().toISOString(), email: user.email,
+                id: 'SOL-' + new Date().getTime(), timestamp: new Date().toISOString(), 
+                email: userEmail, // Usa la variable global
                 item: newItemSelect.value, quantity: parseInt(document.getElementById('quantity-input').value)
             };
             try {
-                const response = await fetch('/.netlify/functions/guardar-datos', { method: 'POST', body: JSON.stringify(payload), headers: { Authorization: `Bearer ${user.token.access_token}` } });
+                const response = await fetch('/.netlify/functions/guardar-datos', { method: 'POST', body: JSON.stringify(payload), headers: { 'x-api-key': APP_API_KEY, 'Content-Type': 'application/json' } });
                 if (!response.ok) throw new Error('Hubo un problema al guardar la solicitud.');
                 showToast('Solicitud enviada con éxito.');
                 newRequestForm.reset();
@@ -252,11 +301,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 itemId: document.getElementById('entry-item-select').value, quantity: parseInt(document.getElementById('entry-quantity').value),
                 cost: parseFloat(document.getElementById('entry-cost').value), provider: document.getElementById('entry-provider').value,
                 invoice: document.getElementById('entry-invoice').value, expirationDate: document.getElementById('entry-expiration').value,
-                serialNumber: document.getElementById('entry-serial').value
+                serialNumber: document.getElementById('entry-serial').value,
+                userEmail: userEmail // Añade el email para la auditoría y el rol check
             };
             try {
-                const user = netlifyIdentity.currentUser();
-                const response = await fetch('/.netlify/functions/registrar-entrada', { method: 'POST', body: JSON.stringify(payload), headers: { Authorization: `Bearer ${user.token.access_token}` } });
+                const response = await fetch('/.netlify/functions/registrar-entrada', { method: 'POST', body: JSON.stringify(payload), headers: { 'x-api-key': APP_API_KEY, 'Content-Type': 'application/json' } });
                 if (!response.ok) throw new Error((await response.json()).error || 'Falló el registro.');
                 showToast('Entrada registrada con éxito.');
                 newEntryForm.reset();
@@ -277,11 +326,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 name: document.getElementById('item-name-input').value, sku: document.getElementById('item-sku-input').value,
                 family: document.getElementById('item-family-input').value, unit: document.getElementById('item-unit-input').value,
                 description: document.getElementById('item-desc-input').value, minStock: parseInt(document.getElementById('item-min-stock-input').value) || 0,
-                serialNumber: document.getElementById('item-serial-input').value
+                serialNumber: document.getElementById('item-serial-input').value,
+                userEmail: userEmail // Añade el email para la auditoría y el rol check
             };
             try {
-                const user = netlifyIdentity.currentUser();
-                const response = await fetch('/.netlify/functions/crear-insumo', { method: 'POST', body: JSON.stringify(payload), headers: { Authorization: `Bearer ${user.token.access_token}` } });
+                const response = await fetch('/.netlify/functions/crear-insumo', { method: 'POST', body: JSON.stringify(payload), headers: { 'x-api-key': APP_API_KEY, 'Content-Type': 'application/json' } });
                 if (!response.ok) throw new Error('No se pudo crear el insumo.');
                 showToast('Insumo añadido al catálogo con éxito.');
                 newCatalogForm.reset();
@@ -301,10 +350,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 button.disabled = true; button.textContent = '...';
                 const { id, action } = button.dataset;
                 try {
-                    const user = netlifyIdentity.currentUser();
                     const response = await fetch('/.netlify/functions/actualizar-solicitud', {
-                        method: 'POST', body: JSON.stringify({ requestId: id, action: action }),
-                        headers: { Authorization: `Bearer ${user.token.access_token}` }
+                        method: 'POST', body: JSON.stringify({ requestId: id, action: action, approverEmail: userEmail }),
+                        headers: { 'x-api-key': APP_API_KEY, 'Content-Type': 'application/json' }
                     });
                     if (!response.ok) throw new Error('Falló la actualización.');
                     showToast(`Solicitud ${action.toLowerCase()}.`);
@@ -341,4 +389,14 @@ document.addEventListener('DOMContentLoaded', () => {
             renderUserRequestsTable(filteredRequests);
         });
     }
+
+    // --- LLAMADA INICIAL DE LA APLICACIÓN ---
+    // Inicia el nuevo flujo de login manual (si el email no está en localStorage, pedirá prompt)
+    if (userEmail) {
+        handleManualLogin();
+    } else {
+        // Ejecuta el login manual al cargar si no hay email guardado
+        document.addEventListener('DOMContentLoaded', handleManualLogin);
+    }
+
 });

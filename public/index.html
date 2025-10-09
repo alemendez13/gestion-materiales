@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Gestión de Inventarios</title>
-    <script type="text/javascript" src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
@@ -15,7 +14,6 @@
     <div class="p-4 border-b">
         <img src="logo.png" alt="Logo de la Empresa" class="w-32 mx-auto mb-4">
         <h1 class="text-2xl font-bold text-gray-800">Inventario</h1>
-        <div data-netlify-identity-menu class="mt-4"></div>
     </div>
             <ul id="main-nav" class="mt-4 hidden">
                 <li><a href="#" class="nav-link active" data-view="dashboard-view"><span class="material-icons">dashboard</span>Dashboard</a></li>
@@ -168,21 +166,7 @@
     <div id="toast" class="hidden fixed bottom-5 right-5 p-4 rounded-md text-white">
         <p id="toast-message"></p>
     </div>
+    <script>window.APP_API_KEY_PUBLIC = "${APP_API_KEY}"; window.USER_ROLE = null;</script>
     <script src="script.js"></script>
-        <script>
-        if (window.netlifyIdentity) {
-            window.netlifyIdentity.on('init', user => {
-                if (!user) {
-                    window.netlifyIdentity.on('login', () => {
-                        document.location.href = "/";
-                    });
-                }
-            });
-            
-            logo: {
-                src: './logo.png' // Asegúrate de que la ruta sea correcta
-            }
-        };
-    </script>
 </body>
 </html>
