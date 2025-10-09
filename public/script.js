@@ -163,15 +163,26 @@ const fetchRole = async (email) => {
         setTimeout(() => toast.classList.add('hidden'), 3000);
     };
 
-    const showView = (viewId) => {
-        views.forEach(view => view.classList.add('hidden'));
-        const activeView = document.getElementById(viewId);
-        if (activeView) activeView.classList.remove('hidden');
-        navLinks.forEach(link => {
-            const parentLi = link.closest('li');
-            parentLi.classList.toggle('bg-gray-200', link.dataset.view === viewId);
-        });
-    };
+// CÓDIGO MODIFICADO (con logs)
+const showView = (viewId) => {
+    // --- LOG 1: Ver qué vista se está solicitando ---
+    console.log(`Intentando mostrar la vista con ID: '${viewId}'`);
+    views.forEach(view => view.classList.add('hidden'));
+    const activeView = document.getElementById(viewId);
+    // --- LOG 2: Verificar si se encontró el elemento HTML ---
+    console.log('Elemento encontrado:', activeView);
+    if (activeView) {
+        activeView.classList.remove('hidden');
+        // --- LOG 3: Confirmar que se intentó mostrar ---
+        console.log(`Se ha removido la clase 'hidden' del elemento.`);
+    } else {
+        console.error(`¡ERROR! No se encontró ningún elemento con el id '${viewId}'.`);
+    }
+    navLinks.forEach(link => {
+        const parentLi = link.closest('li');
+        parentLi.classList.toggle('bg-gray-200', link.dataset.view === viewId);
+    });
+};
 
     const populateCatalogDropdowns = () => {
         if (!newItemSelect || !newEntryItemSelect || !appState.catalog) return;
