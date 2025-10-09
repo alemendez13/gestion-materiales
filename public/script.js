@@ -390,13 +390,9 @@ const fetchRole = async (email) => {
         });
     }
 
-    // --- LLAMADA INICIAL DE LA APLICACIÓN ---
-    // Inicia el nuevo flujo de login manual (si el email no está en localStorage, pedirá prompt)
-    if (userEmail) {
-        handleManualLogin();
-    } else {
-        // Ejecuta el login manual al cargar si no hay email guardado
-        document.addEventListener('DOMContentLoaded', handleManualLogin);
-    }
+        // --- LLAMADA INICIAL DE LA APLICACIÓN (CORREGIDA) ---
+    // Esta llamada ahora está DENTRO del DOMContentLoaded,
+    // por lo que se ejecutará en el momento correcto.
+    handleManualLogin();
 
 });
