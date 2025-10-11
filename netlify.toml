@@ -2,3 +2,6 @@
   command = "sed -i 's|__APP_API_KEY__|'\"$APP_API_KEY\"'|g' public/index.html"
   publish = "public"
   functions = "netlify/functions"
+
+[dev]
+  port = 9999
