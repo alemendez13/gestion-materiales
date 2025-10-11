@@ -50,21 +50,22 @@ exports.handler = async (event, context) => {
             valueInputOption: 'USER_ENTERED',
             resource: {
                 values: [
-                    // --- CÓDIGO CORREGIDO ---
-                    // Este array ahora coincide con el orden exacto de las 12 columnas de tu hoja.
-                    [
-                        '',                 // A: Folio (se deja vacío)
-                        newItemId,          // B: ID_INSUMO
-                        item.sku,           // C: SKU
-                        item.name,          // D: Nombre_Producto
-                        item.description,   // E: Descripcion
-                        item.family,        // F: Familia
-                        item.unit,          // G: Unidad_Medida
-                        item.minStock,      // H: Stock_Minimo
-                        item.maxStock,      // I: Stock_Maximo
-                        item.location,      // J: Ubicacion
-                        'Activo',           // K: Estatus (valor fijo)
-                        item.isAsset || false // L: Es_Activo (se asume un valor booleano)
+    // --- CÓDIGO FINAL Y DEFINITIVO ---
+    // Este array ahora coincide con el orden exacto de las 13 columnas de tu hoja.
+    [
+        '',                 // A: Folio (se deja vacío)
+        newItemId,          // B: ID_INSUMO
+        item.sku,           // C: SKU
+        item.name,          // D: Nombre_Producto
+        item.description,   // E: Descripcion
+        item.family,        // F: Familia
+        item.unit,          // G: Unidad_Medida
+        item.minStock,      // H: Stock_Minimo
+        item.maxStock,      // I: Stock_Maximo
+        item.location,      // J: Ubicacion
+        'Activo',           // K: Estatus (valor fijo)
+        item.isAsset || false, // L: Es_Activo (se asume un valor booleano)
+        item.serialNumber   // M: N_Serie (el nuevo campo)
                     ]
                 ],
             },
