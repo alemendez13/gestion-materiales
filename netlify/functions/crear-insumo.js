@@ -61,8 +61,11 @@ exports.handler = async (event, context) => {
             range: 'CATALOGO_INSUMOS!A1',
             valueInputOption: 'USER_ENTERED',
             resource: {
-                values: [
-                    [newItemId, item.sku, item.name, item.description, item.family, item.unit, item.minStock, item.maxStock, item.location, 'Activo', '', item.serialNumber]
+                values: 
+                    [// --- CORRECCIÓN ---
+                    // Se deja el primer campo vacío para la columna 'Folio'.
+                    // El 'newItemId' se inserta en la segunda posición (columna 'ID_Insumo').
+                    ['', newItemId, item.sku, item.name, item.description, item.family, item.unit, item.minStock, item.maxStock, 'Activo', item.isAsset, item.serialNumber]
                 ],
             },
         });
