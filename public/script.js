@@ -1,13 +1,12 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // --- INYECCIÓN DE CLAVE API Y EMAIL (FASE 2.A) ---
-    // La clave es inyectada globalmente por Netlify en index.html
+    // --- INYECCIÓN DE CLAVE API Y EMAIL ---
     const APP_API_KEY = window.APP_API_KEY_PUBLIC;
     let userEmail = localStorage.getItem('userEmail') || null;
+
     // --- ESTADO DE LA APLICACIÓN ---
     let appState = {
         requests: [],
         catalog: [],
-        // userProfile ya no se inicializa con Netlify Identity
         userProfile: { role: window.USER_ROLE || null, email: userEmail }
     };
 
@@ -34,11 +33,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!mainContent) return;
         mainContent.classList.remove('hidden');
         
-        // La ul de navegación también se debe mostrar
-        const navUl = document.getElementById('main-nav');
-        if(navUl) navUl.classList.remove('hidden');
+        if(mainNav) mainNav.classList.remove('hidden');
         
-        // Compara el rol sin importar espacios o mayúsculas/minúsculas.
         if (profile && profile.role && profile.role.trim().toLowerCase() === 'admin') {
             if (adminNavLink) adminNavLink.classList.remove('hidden');
             if (reportsNavLink) reportsNavLink.classList.remove('hidden');
@@ -48,38 +44,34 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-// --- LÓGICA DE OBTENCIÓN DE ROL (OPTIMIZADA) ---
-const fetchRole = async (email) => {
-    try {
-        // Realiza UNA ÚNICA llamada a la nueva función de backend.
-        const response = await fetch('/.netlify/functions/get-profile', {
-            method: 'POST',
-            headers: { 
-                'x-api-key': APP_API_KEY, 
-                'Content-Type': 'application/json' 
-            },
-            body: JSON.stringify({ userEmail: email })
-        });
+    // --- LÓGICA DE OBTENCIÓN DE ROL (OPTIMIZADA) ---
+    const fetchRole = async (email) => {
+        try {
+            const response = await fetch('/.netlify/functions/get-profile', {
+                method: 'POST',
+                headers: { 
+                    'x-api-key': APP_API_KEY, 
+                    'Content-Type': 'application/json' 
+                },
+                body: JSON.stringify({ userEmail: email })
+            });
 
-        // Si la respuesta no es exitosa (ej. 403, 404, 500), lanza un error.
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'No se pudo verificar el usuario.');
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'No se pudo verificar el usuario.');
+            }
+
+            const profile = await response.json();
+            return profile.role;
+
+        } catch (error) {
+            console.error("Error al obtener el rol:", error.message);
+            showToast(error.message, true);
+            return null; 
         }
+    };
 
-        // Si es exitosa, extrae el rol del cuerpo de la respuesta.
-        const profile = await response.json();
-        return profile.role; // Devuelve directamente el rol (ej. 'admin' o 'user')
-
-    } catch (error) {
-        // Muestra el error en la consola y al usuario para mejor depuración.
-        console.error("Error al obtener el rol:", error.message);
-        showToast(error.message, true); // Opcional: notificar al usuario.
-        return null; 
-    }
-};
-
-    // --- LÓGICA DE LOGIN MANUAL (REEMPLAZO TOTAL DE NETLIFY IDENTITY) ---
+    // --- LÓGICA DE LOGIN MANUAL ---
     const handleManualLogin = async () => {
         let email = userEmail;
         if (!email) {
@@ -91,13 +83,15 @@ const fetchRole = async (email) => {
             userEmail = email;
             localStorage.setItem('userEmail', email);
 
-            // Cargar el rol antes de cargar la app
             const role = await fetchRole(email);
-            appState.userProfile = { email: email, role: role || 'user' }; 
-            window.USER_ROLE = role || 'user';
             
-            showAppForUser(appState.userProfile);
-            await initializeApp();
+            if (role) { // Solo si el rol es válido, continuamos
+                appState.userProfile = { email: email, role: role }; 
+                window.USER_ROLE = role;
+                
+                showAppForUser(appState.userProfile);
+                await initializeApp();
+            }
             
         } else {
             alert("El email es necesario para iniciar la aplicación. Recarga la página para intentarlo.");
@@ -109,50 +103,49 @@ const fetchRole = async (email) => {
         if (loader) loader.classList.remove('hidden');
         if (content) content.classList.add('hidden');
 
-        // --- ADAPTACIÓN AL PLAN 2 ---
-        if (!userEmail) { // Si userEmail es nulo, la app no ha iniciado sesión
+        if (!userEmail) {
              handleManualLogin();
-             return; // Detener la inicialización si no hay email
+             return;
         }
         
         try {
-            // Reemplazamos las llamadas fetch con la seguridad API Key + Email en el body
             const [requestsRes, catalogRes] = await Promise.all([
                 fetch('/.netlify/functions/leer-datos', { 
                     method: 'POST',
                     headers: { 'x-api-key': APP_API_KEY, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userEmail: userEmail }) // Adjuntamos el email para filtrar los datos
+                    body: JSON.stringify({ userEmail: userEmail })
                 }),
                 fetch('/.netlify/functions/leer-catalogo', { 
-                    method: 'POST', // Usar POST para adjuntar la clave API es el estándar en tu proyecto
+                    method: 'POST',
                     headers: { 'x-api-key': APP_API_KEY, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userEmail: userEmail }) // Adjuntamos email aunque no filtre el catálogo, valida el acceso
+                    body: JSON.stringify({ userEmail: userEmail })
                 })
             ]);
 
-
             if (!requestsRes.ok || !catalogRes.ok) {
-                // Si falla el acceso, podría ser la API Key o el email, el backend devuelve 403 o 401
-                const errorData = await requestsRes.json();
+                const errorData = await (requestsRes.ok ? catalogRes.json() : requestsRes.json());
                 throw new Error(errorData.error || 'No se pudieron cargar los datos iniciales.');
             }
             
             appState.requests = await requestsRes.json();
             appState.catalog = await catalogRes.json();
             
-            const userRequests = appState.requests;
-            renderUserRequestsTable(userRequests);
-            
+            renderUserRequestsTable(appState.requests);
             populateCatalogDropdowns();
+
             if (loader) loader.classList.add('hidden');
             if (content) content.classList.remove('hidden');
+            
+            // Muestra la vista del dashboard por defecto al iniciar
             showView('dashboard-view');
 
         } catch (error) {
             showToast(error.message, true);
+            if (loader) loader.classList.add('hidden');
         }
     };
-    // --- FUNCIONES AUXILIARES Y DE RENDERIZADO (sin cambios) ---
+
+    // --- FUNCIONES AUXILIARES Y DE RENDERIZADO ---
     const showToast = (message, isError = false) => {
         const toast = document.getElementById('toast');
         if (!toast) return;
@@ -163,25 +156,27 @@ const fetchRole = async (email) => {
         setTimeout(() => toast.classList.add('hidden'), 3000);
     };
 
-// PEGAR ESTA NUEVA VERSIÓN
-const showView = (viewId) => {
-    // Oculta todas las vistas
-    views.forEach(view => {
-        view.style.display = 'none';
-    });
+    // VERSIÓN FINAL Y ROBUSTA DE showView
+    const showView = (viewId) => {
+        // Oculta todas las vistas
+        views.forEach(view => {
+            view.style.display = 'none';
+        });
 
-    // Muestra solo la vista activa
-    const activeView = document.getElementById(viewId);
-    if (activeView) {
-        activeView.style.display = 'block';
-    }
-    
-    // Ilumina el enlace del menú correspondiente
-    navLinks.forEach(link => {
-        const parentLi = link.closest('li');
-        parentLi.classList.toggle('bg-gray-200', link.dataset.view === viewId);
-    });
-};
+        // Muestra solo la vista activa
+        const activeView = document.getElementById(viewId);
+        if (activeView) {
+            activeView.style.display = 'block';
+        }
+        
+        // Ilumina el enlace del menú correspondiente
+        navLinks.forEach(link => {
+            const parentLi = link.closest('li');
+            if (parentLi) {
+                parentLi.classList.toggle('bg-gray-200', link.dataset.view === viewId);
+            }
+        });
+    };
 
     const populateCatalogDropdowns = () => {
         if (!newItemSelect || !newEntryItemSelect || !appState.catalog) return;
@@ -194,45 +189,63 @@ const showView = (viewId) => {
     };
 
     const renderUserRequestsTable = (requestsToRender) => {
-        if (!userTableContainer) return;
+        const userView = document.getElementById('dashboard-view');
+        if (!userView) return;
+        
+        let contentHTML;
         if (!requestsToRender || requestsToRender.length === 0) {
-            userTableContainer.innerHTML = '<p class="text-gray-500">No tienes solicitudes por el momento.</p>';
-            return;
-        }
-        const tableRows = requestsToRender.map(req => {
-            const catalogItem = appState.catalog.find(cItem => cItem.id === req.item);
-            const itemName = catalogItem ? catalogItem.name : (req.item || 'Desconocido');
-            return `
-                <tr class="border-b">
-                    <td class="p-3">${req.id || 'N/A'}</td>
-                    <td class="p-3">${itemName}</td>
-                    <td class="p-3 text-center">${req.quantity || 'N/A'}</td>
-                    <td class="p-3"><span class="px-2 py-1 text-xs font-semibold rounded-full bg-gray-200 text-gray-800">${req.status || 'N/A'}</span></td>
-                    <td class="p-3 text-sm text-gray-500">${new Date(req.timestamp).toLocaleDateString()}</td>
-                </tr>
+            contentHTML = '<p class="text-gray-500">No tienes solicitudes por el momento.</p>';
+        } else {
+            const tableRows = requestsToRender.map(req => {
+                const catalogItem = appState.catalog.find(cItem => cItem.id === req.item);
+                const itemName = catalogItem ? catalogItem.name : (req.item || 'Desconocido');
+                return `
+                    <tr class="border-b">
+                        <td class="p-3">${req.id || 'N/A'}</td>
+                        <td class="p-3">${itemName}</td>
+                        <td class="p-3 text-center">${req.quantity || 'N/A'}</td>
+                        <td class="p-3"><span class="px-2 py-1 text-xs font-semibold rounded-full ${req.status === 'Aprobada' ? 'bg-green-100 text-green-800' : req.status === 'Rechazada' ? 'bg-red-100 text-red-800' : 'bg-gray-200 text-gray-800'}">${req.status || 'N/A'}</span></td>
+                        <td class="p-3 text-sm text-gray-500">${new Date(req.timestamp).toLocaleDateString()}</td>
+                    </tr>
+                `;
+            }).join('');
+            contentHTML = `
+                <table class="w-full text-left">
+                    <thead><tr class="bg-gray-50 border-b"><th class="p-3 font-semibold text-gray-600">ID</th><th class="p-3 font-semibold text-gray-600">Insumo</th><th class="p-3 font-semibold text-gray-600 text-center">Cantidad</th><th class="p-3 font-semibold text-gray-600">Estatus</th><th class="p-3 font-semibold text-gray-600">Fecha</th></tr></thead>
+                    <tbody>${tableRows}</tbody>
+                </table>
             `;
-        }).join('');
-        userTableContainer.innerHTML = `
-            <table class="w-full text-left">
-                <thead><tr class="bg-gray-50 border-b"><th class="p-3 font-semibold text-gray-600">ID</th><th class="p-3 font-semibold text-gray-600">Insumo</th><th class="p-3 font-semibold text-gray-600 text-center">Cantidad</th><th class="p-3 font-semibold text-gray-600">Estatus</th><th class="p-3 font-semibold text-gray-600">Fecha</th></tr></thead>
-                <tbody>${tableRows}</tbody>
-            </table>
+        }
+        
+        userView.innerHTML = `
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-3xl font-semibold text-gray-700">Mis Solicitudes</h2>
+                <div class="w-1/3">
+                    <input type="search" id="search-input" placeholder="Buscar por insumo o estatus..." class="w-full p-2 border border-gray-300 rounded-md">
+                </div>
+            </div>
+            <div id="requests-table-container" class="bg-white p-6 rounded-lg shadow-sm">${contentHTML}</div>
         `;
     };
 
     const renderPendingRequestsTable = () => {
         if (!adminTableContainer) return;
         const pendingRequests = appState.requests.filter(req => req.status === 'Pendiente');
+        
         if (pendingRequests.length === 0) {
             adminTableContainer.innerHTML = '<h3 class="text-xl font-semibold text-gray-800 mb-4">Solicitudes Pendientes</h3><p class="text-gray-500">No hay solicitudes pendientes.</p>';
             return;
         }
+
         const tableRows = pendingRequests.map(req => {
             const catalogItem = appState.catalog.find(cItem => cItem.id === req.item);
             const itemName = catalogItem ? catalogItem.name : (req.item || 'Desconocido');
             return `
                 <tr class="border-b">
-                    <td class="p-3">${req.email}</td><td class="p-3">${itemName}</td><td class="p-3 text-center">${req.quantity}</td><td class="p-3 text-sm text-gray-500">${new Date(req.timestamp).toLocaleDateString()}</td>
+                    <td class="p-3">${req.email}</td>
+                    <td class="p-3">${itemName}</td>
+                    <td class="p-3 text-center">${req.quantity}</td>
+                    <td class="p-3 text-sm text-gray-500">${new Date(req.timestamp).toLocaleDateString()}</td>
                     <td class="p-3">
                         <button data-id="${req.id}" data-action="Aprobada" class="action-btn bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600">Aprobar</button>
                         <button data-id="${req.id}" data-action="Rechazada" class="action-btn bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 ml-2">Rechazar</button>
@@ -240,6 +253,7 @@ const showView = (viewId) => {
                 </tr>
             `;
         }).join('');
+
         adminTableContainer.innerHTML = `
             <h3 class="text-xl font-semibold text-gray-800 mb-4">Solicitudes Pendientes</h3>
             <table class="w-full text-left">
@@ -252,8 +266,11 @@ const showView = (viewId) => {
     const loadReportsView = async () => {
         const totalValueEl = document.getElementById('total-inventory-value');
         const lowStockEl = document.getElementById('low-stock-items-container');
+        if (!totalValueEl || !lowStockEl) return;
+
         totalValueEl.textContent = 'Calculando...';
         lowStockEl.innerHTML = '<p>Calculando...</p>';
+        
         try {
             const response = await fetch('/.netlify/functions/generar-reporte', { 
                 method: 'POST', 
@@ -261,8 +278,10 @@ const showView = (viewId) => {
                 body: JSON.stringify({ userEmail: userEmail }) 
             });
             if (!response.ok) throw new Error('No se pudo generar el reporte.');
+            
             const data = await response.json();
             totalValueEl.textContent = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(data.totalInventoryValue || 0);
+            
             if (data.lowStockItems && data.lowStockItems.length > 0) {
                 const itemsList = data.lowStockItems.map(item => `<div class="flex justify-between items-center p-2 border-b"><span>${item.name}</span><span class="font-bold text-red-500">${item.stock} / ${item.minStock}</span></div>`).join('');
                 lowStockEl.innerHTML = itemsList;
@@ -276,17 +295,22 @@ const showView = (viewId) => {
         }
     };
 
-    // --- EVENT LISTENERS (sin cambios, solo se quita la cabecera x-user-roles) ---
+    // --- EVENT LISTENERS ---
     if (newRequestForm) {
         newRequestForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const submitButton = e.target.querySelector('button');
             submitButton.disabled = true;
+            
             const payload = {
-                id: 'SOL-' + new Date().getTime(), timestamp: new Date().toISOString(), 
-                email: userEmail, // Usa la variable global
-                item: newItemSelect.value, quantity: parseInt(document.getElementById('quantity-input').value)
+                id: 'SOL-' + new Date().getTime(), 
+                timestamp: new Date().toISOString(), 
+                email: userEmail,
+                item: newItemSelect.value, 
+                quantity: parseInt(document.getElementById('quantity-input').value),
+                userEmail: userEmail // Necesario para la validación en guardar-datos.js
             };
+
             try {
                 const response = await fetch('/.netlify/functions/guardar-datos', { method: 'POST', body: JSON.stringify(payload), headers: { 'x-api-key': APP_API_KEY, 'Content-Type': 'application/json' } });
                 if (!response.ok) throw new Error('Hubo un problema al guardar la solicitud.');
@@ -307,13 +331,18 @@ const showView = (viewId) => {
             e.preventDefault();
             const button = e.target.querySelector('button');
             button.disabled = true; button.textContent = 'Registrando...';
+            
             const payload = {
-                itemId: document.getElementById('entry-item-select').value, quantity: parseInt(document.getElementById('entry-quantity').value),
-                cost: parseFloat(document.getElementById('entry-cost').value), provider: document.getElementById('entry-provider').value,
-                invoice: document.getElementById('entry-invoice').value, expirationDate: document.getElementById('entry-expiration').value,
+                itemId: document.getElementById('entry-item-select').value, 
+                quantity: parseInt(document.getElementById('entry-quantity').value),
+                cost: parseFloat(document.getElementById('entry-cost').value), 
+                provider: document.getElementById('entry-provider').value,
+                invoice: document.getElementById('entry-invoice').value, 
+                expirationDate: document.getElementById('entry-expiration').value,
                 serialNumber: document.getElementById('entry-serial').value,
-                userEmail: userEmail // Añade el email para la auditoría y el rol check
+                userEmail: userEmail
             };
+
             try {
                 const response = await fetch('/.netlify/functions/registrar-entrada', { method: 'POST', body: JSON.stringify(payload), headers: { 'x-api-key': APP_API_KEY, 'Content-Type': 'application/json' } });
                 if (!response.ok) throw new Error((await response.json()).error || 'Falló el registro.');
@@ -332,13 +361,18 @@ const showView = (viewId) => {
             e.preventDefault();
             const button = e.target.querySelector('button');
             button.disabled = true; button.textContent = 'Añadiendo...';
+            
             const payload = {
-                name: document.getElementById('item-name-input').value, sku: document.getElementById('item-sku-input').value,
-                family: document.getElementById('item-family-input').value, unit: document.getElementById('item-unit-input').value,
-                description: document.getElementById('item-desc-input').value, minStock: parseInt(document.getElementById('item-min-stock-input').value) || 0,
+                name: document.getElementById('item-name-input').value, 
+                sku: document.getElementById('item-sku-input').value,
+                family: document.getElementById('item-family-input').value, 
+                unit: document.getElementById('item-unit-input').value,
+                description: document.getElementById('item-desc-input').value, 
+                minStock: parseInt(document.getElementById('item-min-stock-input').value) || 0,
                 serialNumber: document.getElementById('item-serial-input').value,
-                userEmail: userEmail // Añade el email para la auditoría y el rol check
+                userEmail: userEmail
             };
+
             try {
                 const response = await fetch('/.netlify/functions/crear-insumo', { method: 'POST', body: JSON.stringify(payload), headers: { 'x-api-key': APP_API_KEY, 'Content-Type': 'application/json' } });
                 if (!response.ok) throw new Error('No se pudo crear el insumo.');
@@ -361,7 +395,12 @@ const showView = (viewId) => {
                 const { id, action } = button.dataset;
                 try {
                     const response = await fetch('/.netlify/functions/actualizar-solicitud', {
-                        method: 'POST', body: JSON.stringify({ requestId: id, action: action, approverEmail: userEmail }),
+                        method: 'POST', 
+                        body: JSON.stringify({ 
+                            requestId: id, 
+                            action: action, 
+                            approverEmail: userEmail 
+                        }),
                         headers: { 'x-api-key': APP_API_KEY, 'Content-Type': 'application/json' }
                     });
                     if (!response.ok) throw new Error('Falló la actualización.');
@@ -386,23 +425,21 @@ const showView = (viewId) => {
         });
     });
 
-    if (searchInput) {
-        searchInput.addEventListener('input', () => {
-            const searchTerm = searchInput.value.toLowerCase();
+    // Re-asigna el listener al input de búsqueda después de renderizar la tabla
+    document.body.addEventListener('input', (e) => {
+        if (e.target.id === 'search-input') {
+            const searchTerm = e.target.value.toLowerCase();
             const userRequests = appState.requests;
             const filteredRequests = userRequests.filter(req => {
                 const catalogItem = appState.catalog.find(cItem => cItem.id === req.item);
-                const itemName = catalogItem ? catalogItem.name : '';
-                return (itemName && itemName.toLowerCase().includes(searchTerm)) ||
-                       (req.status && req.status.toLowerCase().includes(searchTerm));
+                const itemName = catalogItem ? catalogItem.name.toLowerCase() : '';
+                return itemName.includes(searchTerm) || req.status.toLowerCase().includes(searchTerm);
             });
             renderUserRequestsTable(filteredRequests);
-        });
-    }
+        }
+    });
 
-        // --- LLAMADA INICIAL DE LA APLICACIÓN (CORREGIDA) ---
-    // Esta llamada ahora está DENTRO del DOMContentLoaded,
-    // por lo que se ejecutará en el momento correcto.
+    // --- LLAMADA INICIAL DE LA APLICACIÓN ---
     handleManualLogin();
 
 });
