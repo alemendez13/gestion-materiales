@@ -64,16 +64,18 @@ if (!userRole) {
 
         const headers = rows.shift(); // Saca la fila de encabezados
 
-        // Mapeamos los resultados a un formato JSON limpio para el frontend
+        // --- INICIO DE LA CORRECCIÓN ---
+        // Se mapean las columnas correctas para que el 'id' corresponda a la columna B (ID_Insumo).
         const catalog = rows.map(row => ({
-            id: row[0],
-            sku: row[1],
-            name: row[2],
-            description: row[3],
-            family: row[4],
-            unit: row[5],
-            minStock: row[6]
+            id: row[1],          // B: ID_Insumo
+            sku: row[2],         // C: SKU
+            name: row[3],        // D: Nombre_Producto
+            description: row[4], // E: Descripcion
+            family: row[5],      // F: Familia
+            unit: row[6],        // G: Unidad_Medida
+            minStock: row[7]     // H: Stock_Minimo
         }));
+        // --- FIN DE LA CORRECCIÓN ---
 
         return { statusCode: 200, body: JSON.stringify(catalog) };
 
