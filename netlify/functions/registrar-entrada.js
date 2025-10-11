@@ -35,18 +35,26 @@ exports.handler = async (event) => {
             return { statusCode: 403, body: JSON.stringify({ error: 'Acceso denegado. No tienes permisos de administrador.' }) };
         }
     
-        // --- INICIO DE LA CORRECCIÓN ---
-        // Se mejora la validación para ser más específica y robusta.
+        // --- INICIO DE LA VALIDACIÓN "BLINDADA" ---
+        // Se añade una validación de tipos de dato para proteger la integridad del inventario.
+        
+        // 1. Validar campos obligatorios
         if (!item.itemId) {
             return { statusCode: 400, body: JSON.stringify({ error: 'Debe seleccionar un insumo.' }) };
         }
-        if (!item.quantity || item.quantity <= 0) {
+        
+        // 2. Validar que la cantidad sea un número válido y positivo
+        const quantity = parseInt(item.quantity);
+        if (isNaN(quantity) || quantity <= 0) {
             return { statusCode: 400, body: JSON.stringify({ error: 'La cantidad debe ser un número mayor a cero.' }) };
         }
-        if (item.cost === null || item.cost < 0) { // Permitimos costo 0 pero no nulo
-            return { statusCode: 400, body: JSON.stringify({ error: 'Debe ingresar un costo unitario válido.' }) };
+
+        // 3. Validar que el costo sea un número válido y no negativo
+        const cost = parseFloat(item.cost);
+        if (isNaN(cost) || cost < 0) {
+            return { statusCode: 400, body: JSON.stringify({ error: 'Debe ingresar un costo unitario válido (cero o mayor).' }) };
         }
-        // --- FIN DE LA CORRECCIÓN ---
+        // --- FIN DE LA VALIDACIÓN "BLINDADA" ---
 
         const auth = getAuth();
         const sheets = google.sheets({ version: 'v4', auth });
@@ -59,19 +67,12 @@ exports.handler = async (event) => {
             valueInputOption: 'USER_ENTERED',
             resource: {
                 values: [
+                    // Se utilizan las variables 'quantity' y 'cost' ya validadas y parseadas.
                     [
-                        newMovementId,
-                        new Date().toISOString(),
-                        item.itemId,
-                        'Entrada',
-                        Math.abs(item.quantity), 
-                        item.cost,
-                        item.provider,
-                        item.invoice,
-                        item.expirationDate,
-                        item.serialNumber,
-                        '', // ID_Solicitud (vacío para entradas)
-                        userEmail
+                        newMovementId, new Date().toISOString(), item.itemId,
+                        'Entrada', quantity, cost,
+                        item.provider, item.invoice, item.expirationDate,
+                        item.serialNumber, '', userEmail
                     ]
                 ],
             },
