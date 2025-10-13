@@ -3,6 +3,7 @@
 const { google } = require('googleapis');
 // Importar auth.js (asumiendo que está en una ruta relativa)
 const { getUserRole } = require('./auth'); 
+const nodemailer = require('nodemailer'); // Se importa nodemailer
 
 
 // Esta función auxiliar para la autenticación se mantiene igual
@@ -15,6 +16,18 @@ const getAuth = () => {
         scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
 };
+
+// --- INICIO DE LA NUEVA FUNCIONALIDAD DE EMAIL ---
+const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: process.env.SMTP_PORT,
+    secure: true, // true para puerto 465, false para otros
+    auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+    },
+});
+// --- FIN DE LA NUEVA FUNCIONALIDAD DE EMAIL ---
 
 exports.handler = async (event, context) => {
 
@@ -64,6 +77,9 @@ exports.handler = async (event, context) => {
             return { statusCode: 404, body: JSON.stringify({ error: 'Solicitud no encontrada.' }) };
         }
 
+        const requestData = rows[rowIndex];
+        const requesterEmail = requestData[2]; // C: Email_Solicitante
+
         if (action === 'Aprobada') {
             const requestData = rows[rowIndex];
             const itemId = requestData[3];
@@ -80,6 +96,16 @@ values: [
 ],
                 },
             });
+
+            // --- ENVÍO DE CORREO DE CONFIRMACIÓN ---
+            await transporter.sendMail({
+                from: `"Sistema de Inventarios" <${process.env.SMTP_USER}>`,
+                to: requesterEmail,
+                subject: `Tu solicitud ${requestId} ha sido aprobada`,
+                html: `<p>Hola,</p><p>Tu solicitud de <strong>${quantity} x ${itemId}</strong> ha sido aprobada y está lista para ser entregada.</p><p>Saludos,<br>El equipo de Administración.</p>`,
+            });
+            // --- FIN DEL ENVÍO DE CORREO ---
+
         }
 
         const rowNumber = rowIndex + 1;
