@@ -11,6 +11,11 @@ const getAuth = () => new google.auth.GoogleAuth({
     scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
 });
 
+// --- INICIO DE LA NUEVA FUNCIONALIDAD ---
+// Se define un umbral en días para considerar un producto "próximo a caducar".
+const EXPIRATION_THRESHOLD_DAYS = 30;
+// --- FIN DE LA NUEVA FUNCIONALIDAD ---
+
 exports.handler = async (event) => {
     
     if (event.httpMethod !== 'POST') {
@@ -51,12 +56,17 @@ exports.handler = async (event) => {
 
         const stockMap = {};
         const costMap = {};
-        
+        const expiringItems = []; // Array para guardar los productos próximos a caducar
+        const today = new Date();
+        const thresholdDate = new Date(today);
+        thresholdDate.setDate(today.getDate() + EXPIRATION_THRESHOLD_DAYS);
+
         movementRows.forEach(mov => {
-            const itemId = mov[2]; // ID_Insumo
-            const type = mov[3];   // Tipo_Movimiento
+            const itemId = mov[2];
+            const type = mov[3];
             const quantity = Number(mov[4]);
-            const cost = Number(mov[5]); // Costo_Unitario
+            const cost = Number(mov[5]);
+            const expirationDateStr = mov[8]; // I: Fecha_Caducidad
 
             if (!stockMap[itemId]) {
                 stockMap[itemId] = 0;
@@ -70,6 +80,26 @@ exports.handler = async (event) => {
                 // asegurando que usemos el costo más reciente.
                 costMap[itemId] = cost;
                 // --- FIN DE LA CORRECCIÓN ---
+
+
+                                // --- INICIO DE LA NUEVA LÓGICA DE CADUCIDAD ---
+                if (expirationDateStr) {
+                    const expirationDate = new Date(expirationDateStr);
+                    if (expirationDate <= thresholdDate) {
+                        // Busca el nombre del producto en el catálogo
+                        const catalogItem = catalogRows.find(row => row[1] === itemId);
+                        const itemName = catalogItem ? catalogItem[3] : 'Desconocido';
+                        
+                        expiringItems.push({
+                            name: itemName,
+                            quantity: quantity,
+                            expirationDate: expirationDate.toLocaleDateString('es-MX') // Formato dd/mm/aaaa
+                        });
+                    }
+                }
+                // --- FIN DE LA NUEVA LÓGICA DE CADUCIDAD ---
+            
+
             } else if (type === 'Salida') {
                 stockMap[itemId] -= quantity;
             }
