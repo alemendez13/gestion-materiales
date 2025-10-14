@@ -411,6 +411,41 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+        // En script.js, dentro del DOMContentLoaded, junto a los otros listeners
+
+// --- INICIO DEL NUEVO LISTENER PARA EXPORTAR ---
+const exportAssetsBtn = document.getElementById('export-assets-btn');
+if (exportAssetsBtn) {
+    exportAssetsBtn.addEventListener('click', async () => {
+        const button = exportAssetsBtn;
+        button.disabled = true;
+        button.textContent = 'Exportando...';
+
+        try {
+            const response = await fetch('/.netlify/functions/exportar-activos', {
+                method: 'POST',
+                headers: { 'x-api-key': APP_API_KEY, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userEmail: userEmail })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Falló la exportación.');
+            }
+            
+            const result = await response.json();
+            showToast(result.message);
+
+        } catch (error) {
+            showToast(error.message, true);
+        } finally {
+            button.disabled = false;
+            button.textContent = 'Exportar Activos';
+        }
+    });
+}
+// --- FIN DEL NUEVO LISTENER ---
+
     if (adminTableContainer) {
         adminTableContainer.addEventListener('click', async (e) => {
             if (e.target.classList.contains('action-btn')) {
@@ -468,37 +503,3 @@ document.addEventListener('DOMContentLoaded', () => {
 
 });
 
-// En script.js, dentro del DOMContentLoaded, junto a los otros listeners
-
-// --- INICIO DEL NUEVO LISTENER PARA EXPORTAR ---
-const exportAssetsBtn = document.getElementById('export-assets-btn');
-if (exportAssetsBtn) {
-    exportAssetsBtn.addEventListener('click', async () => {
-        const button = exportAssetsBtn;
-        button.disabled = true;
-        button.textContent = 'Exportando...';
-
-        try {
-            const response = await fetch('/.netlify/functions/exportar-activos', {
-                method: 'POST',
-                headers: { 'x-api-key': APP_API_KEY, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userEmail: userEmail })
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Falló la exportación.');
-            }
-            
-            const result = await response.json();
-            showToast(result.message);
-
-        } catch (error) {
-            showToast(error.message, true);
-        } finally {
-            button.disabled = false;
-            button.textContent = 'Exportar Activos';
-        }
-    });
-}
-// --- FIN DEL NUEVO LISTENER ---
