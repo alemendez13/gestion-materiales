@@ -273,7 +273,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const lowStockEl = document.getElementById('low-stock-items-container');
             // Se añade el nuevo elemento del DOM
     const expiringEl = document.getElementById('expiring-items-container');
-        if (!totalValueEl || !lowStockEl) return;
+    // --- INICIO DE LA CORRECCIÓN ---
+    // Se añade la verificación de 'expiringEl' para asegurar que todos los elementos existan.
+    if (!totalValueEl || !lowStockEl || !expiringEl) return;
+    // --- FIN DE LA CORRECCIÓN ---
 
         totalValueEl.textContent = 'Calculando...';
         lowStockEl.innerHTML = '<p>Calculando...</p>';
