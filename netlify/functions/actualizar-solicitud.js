@@ -55,8 +55,8 @@ exports.handler = async (event, context) => {
         // 2. Validar el Rol del Usuario en Google Sheets
         const userRole = await getUserRole(approverEmail);
         
-        if (userRole !== 'admin') {
-            return { statusCode: 403, body: JSON.stringify({ error: 'Acceso denegado. No tienes permisos de administrador.' }) };
+if (userRole !== 'admin' && userRole !== 'supervisor') {
+        return { statusCode: 403, body: JSON.stringify({ error: 'Acceso denegado. No tienes permisos de administrador.' }) };
         }
         
         // --- FIN DEL NUEVO BLOQUE DE SEGURIDAD ---

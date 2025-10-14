@@ -31,8 +31,8 @@ exports.handler = async (event) => {
         }
 
         const userRole = await getUserRole(userEmail);
-        if (userRole !== 'admin') {
-            return { statusCode: 403, body: JSON.stringify({ error: 'Acceso denegado. No tienes permisos de administrador.' }) };
+if (userRole !== 'admin' && userRole !== 'supervisor') {
+        return { statusCode: 403, body: JSON.stringify({ error: 'Acceso denegado. No tienes permisos de administrador.' }) };
         }
     
         // --- INICIO DE LA VALIDACIÓN "BLINDADA" ---
