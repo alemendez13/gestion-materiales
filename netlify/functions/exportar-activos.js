@@ -48,7 +48,10 @@ exports.handler = async (event) => {
 
         // 2. Filtrar solo los que son activos fijos
         // La columna L (índice 11) es 'Es_Activo'
-        const activeAssets = allItems.filter(item => item[11] && item[11].toUpperCase() === 'TRUE');
+        // --- INICIO DE LA CORRECCIÓN ---
+        // Se convierte el valor a String() para manejar tanto booleanos (true) como texto ("TRUE").
+        const activeAssets = allItems.filter(item => item[11] && String(item[11]).toUpperCase() === 'TRUE');
+        // --- FIN DE LA CORRECCIÓN ---
 
         if (activeAssets.length === 0) {
             return { statusCode: 200, body: JSON.stringify({ message: 'No se encontraron activos fijos para exportar.' }) };
