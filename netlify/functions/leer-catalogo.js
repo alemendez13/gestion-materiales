@@ -54,15 +54,10 @@ if (!userRole) {
 
         const response = await sheets.spreadsheets.values.get({
             spreadsheetId: process.env.GOOGLE_SHEET_ID,
-            range: 'CATALOGO_INSUMOS!A:G', // Lee las columnas relevantes del catálogo
+            range: 'CATALOGO_INSUMOS!A:M', // Lee las columnas relevantes del catálogo
         });
 
-        const rows = response.data.values || [];
-        if (rows.length === 0) {
-            return { statusCode: 200, body: JSON.stringify([]) };
-        }
-
-        const headers = rows.shift(); // Saca la fila de encabezados
+        const rows = (response.data.values || []).slice(1);
 
         // --- INICIO DE LA CORRECCIÓN ---
         // Se mapean las columnas correctas para que el 'id' corresponda a la columna B (ID_Insumo).
