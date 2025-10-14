@@ -35,14 +35,19 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if(mainNav) mainNav.classList.remove('hidden');
         
-        if (profile && profile.role && profile.role.trim().toLowerCase() === 'admin') {
-            if (adminNavLink) adminNavLink.classList.remove('hidden');
-            if (reportsNavLink) reportsNavLink.classList.remove('hidden');
-        } else {
-            if (adminNavLink) adminNavLink.classList.add('hidden');
-            if (reportsNavLink) reportsNavLink.classList.add('hidden');
-        }
-    };
+    const role = profile && profile.role ? profile.role.trim().toLowerCase() : '';
+
+    if (role === 'admin') {
+        if (adminNavLink) adminNavLink.classList.remove('hidden');
+        if (reportsNavLink) reportsNavLink.classList.remove('hidden');
+    } else if (role === 'supervisor') {
+        if (adminNavLink) adminNavLink.classList.remove('hidden'); // Supervisor ve Administración
+        if (reportsNavLink) reportsNavLink.classList.add('hidden'); // Pero no ve Reportes
+    } else {
+        if (adminNavLink) adminNavLink.classList.add('hidden');
+        if (reportsNavLink) reportsNavLink.classList.add('hidden');
+    }
+};
 
     // --- LÓGICA DE OBTENCIÓN DE ROL (OPTIMIZADA) ---
     const fetchRole = async (email) => {
@@ -266,10 +271,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const loadReportsView = async () => {
         const totalValueEl = document.getElementById('total-inventory-value');
         const lowStockEl = document.getElementById('low-stock-items-container');
+            // Se añade el nuevo elemento del DOM
+    const expiringEl = document.getElementById('expiring-items-container');
         if (!totalValueEl || !lowStockEl) return;
 
         totalValueEl.textContent = 'Calculando...';
         lowStockEl.innerHTML = '<p>Calculando...</p>';
+        expiringEl.innerHTML = '<p>Calculando...</p>';
         
         try {
             const response = await fetch('/.netlify/functions/generar-reporte', { 
@@ -288,10 +296,26 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 lowStockEl.innerHTML = '<p class="text-gray-500">No hay insumos con stock bajo.</p>';
             }
+
+        // --- INICIO DE LA NUEVA LÓGICA PARA CADUCIDAD ---
+        if (data.expiringItems && data.expiringItems.length > 0) {
+            const expiringList = data.expiringItems.map(item => 
+                `<div class="flex justify-between items-center p-2 border-b">
+                    <span>${item.name} (Cant: ${item.quantity})</span>
+                    <span class="font-bold text-orange-500">Caduca: ${item.expirationDate}</span>
+                </div>`
+            ).join('');
+            expiringEl.innerHTML = expiringList;
+        } else {
+            expiringEl.innerHTML = '<p class="text-gray-500">No hay insumos próximos a caducar.</p>';
+        }
+        // --- FIN DE LA NUEVA LÓGICA ---
+
         } catch (error) {
             showToast(error.message, true);
             totalValueEl.textContent = 'Error';
             lowStockEl.innerHTML = '<p class="text-red-500">No se pudo cargar el reporte.</p>';
+            expiringEl.innerHTML = '<p class="text-red-500">No se pudo cargar el reporte.</p>';
         }
     };
 
@@ -443,3 +467,38 @@ document.addEventListener('DOMContentLoaded', () => {
     handleManualLogin();
 
 });
+
+// En script.js, dentro del DOMContentLoaded, junto a los otros listeners
+
+// --- INICIO DEL NUEVO LISTENER PARA EXPORTAR ---
+const exportAssetsBtn = document.getElementById('export-assets-btn');
+if (exportAssetsBtn) {
+    exportAssetsBtn.addEventListener('click', async () => {
+        const button = exportAssetsBtn;
+        button.disabled = true;
+        button.textContent = 'Exportando...';
+
+        try {
+            const response = await fetch('/.netlify/functions/exportar-activos', {
+                method: 'POST',
+                headers: { 'x-api-key': APP_API_KEY, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userEmail: userEmail })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Falló la exportación.');
+            }
+            
+            const result = await response.json();
+            showToast(result.message);
+
+        } catch (error) {
+            showToast(error.message, true);
+        } finally {
+            button.disabled = false;
+            button.textContent = 'Exportar Activos';
+        }
+    });
+}
+// --- FIN DEL NUEVO LISTENER ---
