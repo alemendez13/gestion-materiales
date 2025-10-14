@@ -51,7 +51,7 @@ exports.handler = async (event) => {
         const movementRows = (movementsRes.data.values || []).slice(1);
 
         if (catalogRows.length === 0) {
-            return { statusCode: 200, body: JSON.stringify({ totalInventoryValue: 0, lowStockItems: [] }) };
+            return { statusCode: 200, body: JSON.stringify({ totalInventoryValue: 0, lowStockItems: [], expiringItems: [] }) };
         }
 
         const stockMap = {};
@@ -85,8 +85,8 @@ exports.handler = async (event) => {
                                 // --- INICIO DE LA NUEVA LÓGICA DE CADUCIDAD ---
                 if (expirationDateStr) {
                     const expirationDate = new Date(expirationDateStr);
-                    if (expirationDate <= thresholdDate) {
-                        // Busca el nombre del producto en el catálogo
+                    // Add a check to ensure date is valid
+                    if (!isNaN(expirationDate.getTime()) && expirationDate <= thresholdDate) {
                         const catalogItem = catalogRows.find(row => row[1] === itemId);
                         const itemName = catalogItem ? catalogItem[3] : 'Desconocido';
                         
@@ -123,10 +123,13 @@ exports.handler = async (event) => {
             }
         });
 
+        // --- INICIO DE LA CORRECCIÓN ---
+        // Se añade 'expiringItems' a la respuesta final del JSON.
         return { 
             statusCode: 200, 
-            body: JSON.stringify({ totalInventoryValue, lowStockItems }) 
+            body: JSON.stringify({ totalInventoryValue, lowStockItems, expiringItems }) 
         };
+        // --- FIN DE LA CORRECCIÓN ---
 
     } catch (error) {
         console.error("Error al generar reporte:", error);
