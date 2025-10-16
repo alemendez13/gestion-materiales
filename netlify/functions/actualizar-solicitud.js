@@ -64,7 +64,7 @@ if (userRole !== 'admin' && userRole !== 'supervisor') {
         const auth = getAuth();
         const sheets = google.sheets({ version: 'v4', auth });
         const spreadsheetId = process.env.GOOGLE_SHEET_ID;
-
+        const timestamp = new Date().toISOString();
         const response = await sheets.spreadsheets.values.get({
             spreadsheetId,
             range: 'SOLICITUDES!A:E',
@@ -78,12 +78,46 @@ if (userRole !== 'admin' && userRole !== 'supervisor') {
         }
 
         const requestData = rows[rowIndex];
-        const requesterEmail = requestData[2]; // C: Email_Solicitante
+        const itemId = requestData[3];
+        let quantityToDispense = parseInt(requestData[4]);
+        const requesterEmail = requestData[2];
 
         if (action === 'Aprobada') {
-            const requestData = rows[rowIndex];
-            const itemId = requestData[3];
-            const quantity = parseInt(requestData[4]);
+// --- INICIO DE LA LÓGICA FEFO ---
+            
+            // 1. Leer todos los lotes disponibles para el insumo solicitado.
+            const lotsResponse = await sheets.spreadsheets.values.get({ spreadsheetId, range: 'LOTES!A:F' });
+            let allLots = (lotsResponse.data.values || []).slice(1);
+
+            let availableLots = allLots
+                .map((row, index) => ({ data: row, originalIndex: index + 2 })) // Guardamos el índice original
+                .filter(lot => lot.data[1] === itemId && parseInt(lot.data[3]) > 0);
+
+            if (availableLots.length > 0) {
+                // 2. Ordenar los lotes por fecha de caducidad (el más próximo primero).
+                availableLots.sort((a, b) => new Date(a.data[4]) - new Date(b.data[4]));
+                
+                // 3. Descontar la cantidad de los lotes, empezando por el más próximo a caducar.
+                for (const lot of availableLots) {
+                    if (quantityToDispense <= 0) break;
+
+                    const lotId = lot.data[0];
+                    let lotAvailableQty = parseInt(lot.data[3]);
+                    const dispenseFromThisLot = Math.min(quantityToDispense, lotAvailableQty);
+
+                    lotAvailableQty -= dispenseFromThisLot;
+                    quantityToDispense -= dispenseFromThisLot;
+
+                    // Actualizar la cantidad disponible en la hoja LOTES
+                    await sheets.spreadsheets.values.update({
+                        spreadsheetId,
+                        range: `LOTES!D${lot.originalIndex}`,
+                        valueInputOption: 'USER_ENTERED',
+                        resource: { values: [[lotAvailableQty]] },
+                    });
+                }
+            }
+            // --- FIN DE LA LÓGICA FEFO ---
 
             await sheets.spreadsheets.values.append({
                 spreadsheetId,
@@ -112,16 +146,12 @@ values: [
 
         await sheets.spreadsheets.values.update({
             spreadsheetId,
-            range: `SOLICITUDES!F${rowNumber}:H${rowNumber}`, 
+            range: `SOLICITUDES!F${rowIndex + 1}:H${rowIndex + 1}`,
             valueInputOption: 'USER_ENTERED',
-            resource: {
-                values: [
-                    [action, approverEmail, new Date().toISOString()]
-                ],
-            },
+            resource: { values: [[action, approverEmail, timestamp]] },
         });
         
-        return { statusCode: 200, body: JSON.stringify({ message: 'Solicitud actualizada y movimiento registrado con éxito.' }) };
+return { statusCode: 200, body: JSON.stringify({ message: 'Solicitud actualizada y lote despachado con éxito.' }) };
 
     } catch (error) {
         console.error('Error al actualizar:', error);

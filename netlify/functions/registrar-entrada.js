@@ -58,7 +58,8 @@ if (userRole !== 'admin' && userRole !== 'supervisor') {
 
         const auth = getAuth();
         const sheets = google.sheets({ version: 'v4', auth });
-        
+        const spreadsheetId = process.env.GOOGLE_SHEET_ID;
+        const timestamp = new Date().toISOString();
         const newMovementId = 'MOV-' + new Date().getTime();
 
         await sheets.spreadsheets.values.append({
@@ -78,6 +79,30 @@ if (userRole !== 'admin' && userRole !== 'supervisor') {
             },
         });
         
+        // --- INICIO DE LA NUEVA LÓGICA DE LOTES ---
+        // 2. Si el producto tiene fecha de caducidad, se crea un registro en la hoja LOTES.
+        if (item.expirationDate) {
+            const newLotId = 'LOTE-' + new Date().getTime();
+            await sheets.spreadsheets.values.append({
+                spreadsheetId,
+                range: 'LOTES!A1',
+                valueInputOption: 'USER_ENTERED',
+                resource: {
+                    values: [
+                        [
+                            newLotId,
+                            item.itemId,
+                            quantity, // Cantidad_Inicial
+                            quantity, // Cantidad_Disponible (inicialmente es la misma)
+                            item.expirationDate,
+                            timestamp
+                        ]
+                    ],
+                },
+            });
+        }
+        // --- FIN DE LA NUEVA LÓGICA DE LOTES ---
+
         return { statusCode: 200, body: JSON.stringify({ message: 'Entrada registrada con éxito.' }) };
 
     } catch (error) {
