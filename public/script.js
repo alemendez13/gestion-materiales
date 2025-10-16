@@ -359,20 +359,53 @@ document.addEventListener('DOMContentLoaded', () => {
             const button = e.target.querySelector('button');
             button.disabled = true; button.textContent = 'Registrando...';
             
+                    // --- INICIO DE LA VALIDACIÓN DEL LADO DEL CLIENTE ---
+        // Se añaden validaciones en el frontend para mejorar la experiencia del usuario.
+        const itemId = document.getElementById('entry-item-select').value;
+        const quantity = parseInt(document.getElementById('entry-quantity').value);
+        const cost = parseFloat(document.getElementById('entry-cost').value);
+
+        if (!itemId) {
+            showToast('Error: Debe seleccionar un insumo.', true);
+            button.disabled = false;
+            button.textContent = 'Registrar Entrada';
+            return; // Detiene la ejecución
+        }
+
+        if (isNaN(quantity) || quantity <= 0) {
+            showToast('Error: La cantidad debe ser un número mayor a cero.', true);
+            button.disabled = false;
+            button.textContent = 'Registrar Entrada';
+            return; // Detiene la ejecución
+        }
+
+        if (isNaN(cost) || cost < 0) {
+            showToast('Error: El costo debe ser un número válido (cero o mayor).', true);
+            button.disabled = false;
+            button.textContent = 'Registrar Entrada';
+            return; // Detiene la ejecución
+        }
+        // --- FIN DE LA VALIDACIÓN DEL LADO DEL CLIENTE ---
+
             const payload = {
-                itemId: document.getElementById('entry-item-select').value, 
-                quantity: parseInt(document.getElementById('entry-quantity').value),
-                cost: parseFloat(document.getElementById('entry-cost').value), 
-                provider: document.getElementById('entry-provider').value,
-                invoice: document.getElementById('entry-invoice').value, 
-                expirationDate: document.getElementById('entry-expiration').value,
-                serialNumber: document.getElementById('entry-serial').value,
-                userEmail: userEmail
-            };
+            itemId: itemId, 
+            quantity: quantity,
+            cost: cost, 
+            provider: document.getElementById('entry-provider').value,
+            invoice: document.getElementById('entry-invoice').value, 
+            expirationDate: document.getElementById('entry-expiration').value,
+            serialNumber: document.getElementById('entry-serial').value,
+            userEmail: userEmail
+        };
 
             try {
                 const response = await fetch('/.netlify/functions/registrar-entrada', { method: 'POST', body: JSON.stringify(payload), headers: { 'x-api-key': APP_API_KEY, 'Content-Type': 'application/json' } });
-                if (!response.ok) throw new Error((await response.json()).error || 'Falló el registro.');
+                if (!response.ok){
+                // Ahora, si el backend aún da un error, podemos mostrar un mensaje más específico. 
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Falló el registro.');
+                }
+                
                 showToast('Entrada registrada con éxito.');
                 newEntryForm.reset();
             } catch (error) {
