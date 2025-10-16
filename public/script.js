@@ -150,6 +150,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // 3. Finalmente, asegúrate de llamar a la nueva función para poblar el dropdown
+// cuando la vista de administración se muestre. Modifica el listener de los navLinks así:
+
+// Reemplaza el listener de navLinks con esta versión corregida
+
+navLinks.forEach(link => {
+    link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const viewId = e.currentTarget.dataset.view;
+        showView(viewId);
+        if (viewId === 'admin-view') {
+            renderPendingRequestsTable();
+            populateAssetDropdown(); // ✅ LÍNEA AÑADIDA Y CORREGIDA
+        }
+        if (viewId === 'reports-view') loadReportsView();
+    });
+});
+
     // --- FUNCIONES AUXILIARES Y DE RENDERIZADO ---
     const showToast = (message, isError = false) => {
         const toast = document.getElementById('toast');
@@ -160,6 +178,24 @@ document.addEventListener('DOMContentLoaded', () => {
         toast.classList.remove('hidden');
         setTimeout(() => toast.classList.add('hidden'), 3000);
     };
+
+// 1. Pega esta nueva función de utilidad junto a las otras funciones de renderizado
+const populateAssetDropdown = () => {
+    const assetSelect = document.getElementById('asset-select');
+    if (!assetSelect || !appState.catalog) return;
+
+    // Filtrar el catálogo para obtener solo los activos fijos
+    // NOTA: Esta lógica asume que tu Google Sheet usa 'TRUE' para marcar un activo.
+    // Si usas otro valor como 'Si', ajusta la condición.
+    const assets = appState.catalog.filter(item => String(item.isAsset).toUpperCase() === 'TRUE');
+    
+    const defaultOption = '<option value="" disabled selected>Seleccione un activo...</option>';
+    const assetOptions = assets.map(item =>
+        `<option value="${item.id}">${item.name} (SKU: ${item.sku})</option>`
+    ).join('');
+    
+    assetSelect.innerHTML = defaultOption + assetOptions;
+};
 
     // VERSIÓN FINAL Y ROBUSTA DE showView
     const showView = (viewId) => {
@@ -481,6 +517,56 @@ if (exportAssetsBtn) {
     });
 }
 // --- FIN DEL NUEVO LISTENER ---
+
+// 2. Pega este nuevo event listener junto a los otros listeners de formularios
+const newAssetForm = document.getElementById('new-asset-assignment-form');
+if (newAssetForm) {
+    newAssetForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const button = e.target.querySelector('button');
+        button.disabled = true;
+        button.textContent = 'Generando...';
+
+        const payload = {
+            assetId: document.getElementById('asset-select').value,
+            responsibleName: document.getElementById('responsible-name').value,
+            responsibleEmail: document.getElementById('responsible-email').value,
+            conditions: document.getElementById('asset-conditions').value,
+            userEmail: userEmail // Email del supervisor que está logueado
+        };
+
+        if (!payload.assetId || !payload.responsibleName || !payload.responsibleEmail) {
+            showToast('Por favor, complete todos los campos obligatorios (*).', true);
+            button.disabled = false;
+            button.textContent = 'Generar Responsiva';
+            return;
+        }
+
+        try {
+            const response = await fetch('/.netlify/functions/generar-responsiva', {
+                method: 'POST',
+                body: JSON.stringify(payload),
+                headers: { 'x-api-key': APP_API_KEY, 'Content-Type': 'application/json' }
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'No se pudo generar la responsiva.');
+            }
+
+            showToast('Responsiva generada con éxito.');
+            newAssetForm.reset();
+            await initializeApp(); // Recargar datos para reflejar la salida del stock
+
+        } catch (error) {
+            showToast(error.message, true);
+        } finally {
+            button.disabled = false;
+            button.textContent = 'Generar Responsiva';
+        }
+    });
+}
+
 
     if (adminTableContainer) {
         adminTableContainer.addEventListener('click', async (e) => {
