@@ -54,9 +54,11 @@ exports.handler = async (event) => {
             return { statusCode: 200, body: JSON.stringify({ totalInventoryValue: 0, lowStockItems: [], expiringItems: [] }) };
         }
 
-        const stockMap = {};
-        const costMap = {};
-        const expiringItems = []; // Array para guardar los productos próximos a caducar
+        // 1. Ordenar los movimientos por fecha para un cálculo cronológico preciso.
+        movementRows.sort((a, b) => new Date(a[1]) - new Date(b[1]));
+
+        const inventoryState = {}; // Objeto para rastrear stock y valor por item.
+        const expiringItems = [];
         const today = new Date();
         const thresholdDate = new Date(today);
         thresholdDate.setDate(today.getDate() + EXPIRATION_THRESHOLD_DAYS);
@@ -68,18 +70,17 @@ exports.handler = async (event) => {
             const cost = Number(mov[5]);
             const expirationDateStr = mov[8]; // I: Fecha_Caducidad
 
-            if (!stockMap[itemId]) {
-                stockMap[itemId] = 0;
+            // Inicializar el estado del item si no existe
+            if (!inventoryState[itemId]) {
+                inventoryState[itemId] = { stock: 0, totalValue: 0 };
             }
 
+            const currentState = inventoryState[itemId];
+
             if (type === 'Entrada') {
-                stockMap[itemId] += quantity;
-                // --- INICIO DE LA CORRECCIÓN ---
-                // Se registra el costo unitario de la entrada.
-                // Si hay múltiples entradas, este valor se sobrescribe,
-                // asegurando que usemos el costo más reciente.
-                costMap[itemId] = cost;
-                // --- FIN DE LA CORRECCIÓN ---
+                // Se añade la cantidad y el valor total de la nueva entrada.
+                currentState.stock += quantity;
+                currentState.totalValue += quantity * cost;
 
 
                                 // --- INICIO DE LA NUEVA LÓGICA DE CADUCIDAD ---
@@ -101,23 +102,29 @@ exports.handler = async (event) => {
             
 
             } else if (type === 'Salida') {
-                stockMap[itemId] -= quantity;
+                // Calcular el costo promedio ponderado en el momento de la salida.
+                const weightedAverageCost = currentState.stock > 0 ? currentState.totalValue / currentState.stock : 0;
+                
+                // Se deduce el stock y el valor correspondiente a esa salida.
+                currentState.stock -= quantity;
+                currentState.totalValue -= quantity * weightedAverageCost;
             }
         });
 
         let totalInventoryValue = 0;
         const lowStockItems = [];
 
+        for (const itemId in inventoryState) {
+            totalInventoryValue += inventoryState[itemId].totalValue;
+        }
+
         catalogRows.forEach(item => {
             const id = item[1];       // B: ID_Insumo
             const name = item[3];     // D: Nombre_Producto
             const minStock = Number(item[7]) || 0; // H: Stock_Minimo
             
-            const currentStock = stockMap[id] || 0;
-            const lastCost = costMap[id] || 0;
-
-            totalInventoryValue += currentStock * lastCost;
-
+            const currentStock = inventoryState[id] ? inventoryState[id].stock : 0;
+            
             if (currentStock <= minStock) {
                 lowStockItems.push({ name, stock: currentStock, minStock });
             }
