@@ -37,16 +37,23 @@ document.addEventListener('DOMContentLoaded', () => {
         
     const role = profile && profile.role ? profile.role.trim().toLowerCase() : '';
 
+// --- INICIO DE LA LÓGICA DE ROLES MEJORADA ---
     if (role === 'admin') {
+        // El Admin ve todo.
         if (adminNavLink) adminNavLink.classList.remove('hidden');
         if (reportsNavLink) reportsNavLink.classList.remove('hidden');
+
     } else if (role === 'supervisor') {
-        if (adminNavLink) adminNavLink.classList.remove('hidden'); // Supervisor ve Administración
-        if (reportsNavLink) reportsNavLink.classList.add('hidden'); // Pero no ve Reportes
+        // ✅ El Supervisor ve Administración pero NO Reportes.
+        if (adminNavLink) adminNavLink.classList.remove('hidden');
+        if (reportsNavLink) reportsNavLink.classList.add('hidden');
+        
     } else {
+        // El resto de los usuarios no ven ninguno de los dos.
         if (adminNavLink) adminNavLink.classList.add('hidden');
         if (reportsNavLink) reportsNavLink.classList.add('hidden');
     }
+    // --- FIN DE LA LÓGICA DE ROLES MEJORADA ---
 };
 
     // --- LÓGICA DE OBTENCIÓN DE ROL (OPTIMIZADA) ---
