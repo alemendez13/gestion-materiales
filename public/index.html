@@ -20,6 +20,7 @@
                 <li><a href="#" class="nav-link" data-view="new-request-view"><span class="material-icons">add_shopping_cart</span>Nueva Solicitud</a></li>
                 <li id="admin-nav-link" class="hidden"><a href="#" class="nav-link" data-view="admin-view"><span class="material-icons">admin_panel_settings</span>Administración</a></li>
                 <li id="reports-nav-link" class="hidden"><a href="#" class="nav-link" data-view="reports-view"><span class="material-icons">assessment</span>Reportes</a></li>
+                <li><a href="#" class="nav-link" data-view="inventory-view"><span class="material-icons">inventory</span>Inventario General</a></li>
             </ul>
         </nav>
 
@@ -206,6 +207,16 @@
                         </div>
                     </div>
                 </section>
+
+                <section id="inventory-view" class="view hidden">
+                    <h2 class="text-3xl font-semibold text-gray-700 mb-4">Inventario General</h2>
+                    <div class="bg-white p-6 rounded-lg shadow-sm">
+                        <input type="search" id="inventory-search-input" placeholder="Buscar por nombre, SKU o familia..." class="w-full p-2 border border-gray-300 rounded-md mb-4">
+                        <div id="full-inventory-container">
+                            </div>
+                    </div>
+                </section>
+
             </div>
         </main>
     </div>

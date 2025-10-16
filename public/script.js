@@ -186,6 +186,64 @@ navLinks.forEach(link => {
         setTimeout(() => toast.classList.add('hidden'), 3000);
     };
 
+    // En script.js
+
+// 1. Añade esta nueva función de renderizado
+const renderFullInventory = async () => {
+    const container = document.getElementById('full-inventory-container');
+    if (!container) return;
+    container.innerHTML = '<p>Cargando inventario...</p>';
+
+    try {
+        const response = await fetch('/.netlify/functions/leer-inventario-completo', {
+            method: 'POST',
+            headers: { 'x-api-key': APP_API_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userEmail: userEmail })
+        });
+
+        if (!response.ok) throw new Error('No se pudo cargar el inventario.');
+
+        const inventory = await response.json();
+        appState.fullInventory = inventory; // Guardar en el estado para la búsqueda
+
+        renderInventoryTable(inventory);
+
+    } catch (error) {
+        container.innerHTML = `<p class="text-red-500">${error.message}</p>`;
+    }
+};
+
+const renderInventoryTable = (inventoryData) => {
+    const container = document.getElementById('full-inventory-container');
+    if (inventoryData.length === 0) {
+        container.innerHTML = '<p>No hay productos en el catálogo.</p>';
+        return;
+    }
+
+    const tableRows = inventoryData.map(item => `
+        <tr class="border-b">
+            <td class="p-3">${item.sku}</td>
+            <td class="p-3">${item.name}</td>
+            <td class="p-3">${item.family}</td>
+            <td class="p-3 font-bold text-center">${item.stock}</td>
+        </tr>
+    `).join('');
+
+    container.innerHTML = `
+        <table class="w-full text-left">
+            <thead>
+                <tr class="bg-gray-50 border-b">
+                    <th class="p-3 font-semibold text-gray-600">SKU</th>
+                    <th class="p-3 font-semibold text-gray-600">Nombre del Producto</th>
+                    <th class="p-3 font-semibold text-gray-600">Familia</th>
+                    <th class="p-3 font-semibold text-gray-600 text-center">Stock Actual</th>
+                </tr>
+            </thead>
+            <tbody>${tableRows}</tbody>
+        </table>
+    `;
+};
+
 // 1. Pega esta nueva función de utilidad junto a las otras funciones de renderizado
 const populateAssetDropdown = () => {
     const assetSelect = document.getElementById('asset-select');
@@ -612,11 +670,24 @@ if (newAssetForm) {
             showView(viewId);
             if (viewId === 'admin-view') renderPendingRequestsTable();
             if (viewId === 'reports-view') loadReportsView();
+            // AÑADE ESTA CONDICIÓN
+            if (viewId === 'inventory-view') renderFullInventory();
         });
     });
 
-    // Re-asigna el listener al input de búsqueda después de renderizar la tabla
+    // 3. Añade este listener para la barra de búsqueda del inventario
     document.body.addEventListener('input', (e) => {
+    if (e.target.id === 'inventory-search-input') {
+        const searchTerm = e.target.value.toLowerCase();
+        const filteredInventory = appState.fullInventory.filter(item =>
+            item.name.toLowerCase().includes(searchTerm) ||
+            item.sku.toLowerCase().includes(searchTerm) ||
+            item.family.toLowerCase().includes(searchTerm)
+        );
+        renderInventoryTable(filteredInventory);
+    }
+
+    // Re-asigna el listener al input de búsqueda después de renderizar la tabla
         if (e.target.id === 'search-input') {
             const searchTerm = e.target.value.toLowerCase();
             const userRequests = appState.requests;
@@ -633,4 +704,3 @@ if (newAssetForm) {
     handleManualLogin();
 
 });
-
