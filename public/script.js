@@ -473,6 +473,8 @@ const populateAssetDropdown = () => {
                 description: document.getElementById('item-desc-input').value, 
                 minStock: parseInt(document.getElementById('item-min-stock-input').value) || 0,
                 serialNumber: document.getElementById('item-serial-input').value,
+                // ✅ LÍNEA AÑADIDA: Lee si la casilla está marcada (devuelve true o false)
+                isAsset: document.getElementById('item-is-asset-input').checked,
                 userEmail: userEmail
             };
 
