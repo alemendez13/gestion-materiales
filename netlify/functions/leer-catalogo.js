@@ -59,8 +59,8 @@ if (!userRole) {
 
         const rows = (response.data.values || []).slice(1);
 
-        // --- INICIO DE LA CORRECCIÓN ---
-        // Se mapean las columnas correctas para que el 'id' corresponda a la columna B (ID_Insumo).
+// --- INICIO DE LA CORRECCIÓN ---
+        // Se añade la propiedad "isAsset" al mapeo, leyendo la columna L (índice 11).
         const catalog = rows.map(row => ({
             id: row[1],          // B: ID_Insumo
             sku: row[2],         // C: SKU
@@ -68,7 +68,8 @@ if (!userRole) {
             description: row[4], // E: Descripcion
             family: row[5],      // F: Familia
             unit: row[6],        // G: Unidad_Medida
-            minStock: row[7]     // H: Stock_Minimo
+            minStock: row[7],    // H: Stock_Minimo
+            isAsset: row[11]     // L: Es_Activo  <- ✅ LÍNEA AÑADIDA
         }));
         // --- FIN DE LA CORRECCIÓN ---
 
