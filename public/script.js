@@ -305,23 +305,36 @@ const populateAssetDropdown = () => {
             const tableRows = requestsToRender.map(req => {
                 const catalogItem = appState.catalog.find(cItem => cItem.id === req.item);
                 const itemName = catalogItem ? catalogItem.name : (req.item || 'Desconocido');
-                return `
-                    <tr class="border-b">
-                        <td class="p-3">${req.id || 'N/A'}</td>
-                        <td class="p-3">${itemName}</td>
-                        <td class="p-3 text-center">${req.quantity || 'N/A'}</td>
-                        <td class="p-3"><span class="px-2 py-1 text-xs font-semibold rounded-full ${req.status === 'Aprobada' ? 'bg-green-100 text-green-800' : req.status === 'Rechazada' ? 'bg-red-100 text-red-800' : 'bg-gray-200 text-gray-800'}">${req.status || 'N/A'}</span></td>
-                        <td class="p-3 text-sm text-gray-500">${new Date(req.timestamp).toLocaleDateString()}</td>
-                    </tr>
-                `;
-            }).join('');
-            contentHTML = `
-                <table class="w-full text-left">
-                    <thead><tr class="bg-gray-50 border-b"><th class="p-3 font-semibold text-gray-600">ID</th><th class="p-3 font-semibold text-gray-600">Insumo</th><th class="p-3 font-semibold text-gray-600 text-center">Cantidad</th><th class="p-3 font-semibold text-gray-600">Estatus</th><th class="p-3 font-semibold text-gray-600">Fecha</th></tr></thead>
-                    <tbody>${tableRows}</tbody>
-                </table>
+                // --- INICIO DE LA MEJORA ---
+            return `
+                <tr class="border-b">
+                    <td class="p-3">${req.id || 'N/A'}</td>
+                    <td class="p-3">${req.email || 'N/A'}</td>      <td class="p-3">${itemName}</td>
+                    <td class="p-3 text-center">${req.quantity || 'N/A'}</td>
+                    <td class="p-3"><span class="px-2 py-1 text-xs font-semibold rounded-full ${req.status === 'Aprobada' ? 'bg-green-100 text-green-800' : req.status === 'Rechazada' ? 'bg-red-100 text-red-800' : 'bg-gray-200 text-gray-800'}">${req.status || 'N/A'}</span></td>
+                    <td class="p-3 text-sm text-gray-500">${new Date(req.timestamp).toLocaleDateString()}</td>
+                </tr>
             `;
-        }
+            // --- FIN DE LA MEJORA ---
+            }).join('');
+
+// --- INICIO DE LA MEJORA ---
+        // Se actualizan las cabeceras de la tabla
+        contentHTML = `
+            <table class="w-full text-left">
+                <thead>
+                    <tr class="bg-gray-50 border-b">
+                        <th class="p-3 font-semibold text-gray-600">ID</th>
+                        <th class="p-3 font-semibold text-gray-600">Solicitante</th> <th class="p-3 font-semibold text-gray-600">Producto</th>      <th class="p-3 font-semibold text-gray-600 text-center">Cantidad</th>
+                        <th class="p-3 font-semibold text-gray-600">Estatus</th>
+                        <th class="p-3 font-semibold text-gray-600">Fecha</th>
+                    </tr>
+                </thead>
+                <tbody>${tableRows}</tbody>
+            </table>
+        `;
+        // --- FIN DE LA MEJORA ---
+    }
         
         userView.innerHTML = `
             <div class="flex justify-between items-center mb-4">
