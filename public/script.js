@@ -186,6 +186,75 @@ navLinks.forEach(link => {
         setTimeout(() => toast.classList.add('hidden'), 3000);
     };
 
+const generatePDF = async (payload, catalogItem) => {
+    const { PDFDocument, rgb, StandardFonts } = PDFLib;
+
+    // Create a new PDF
+    const pdfDoc = await PDFDocument.create();
+    const page = pdfDoc.addPage();
+    const { width, height } = page.getSize();
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const fontSize = 12;
+
+    // Add Logo
+    const logoUrl = 'logo.png';
+    const logoImageBytes = await fetch(logoUrl).then(res => res.arrayBuffer());
+    const logoImage = await pdfDoc.embedPng(logoImageBytes);
+    const logoDims = logoImage.scale(0.25);
+    page.drawImage(logoImage, {
+        x: 50,
+        y: height - logoDims.height - 50,
+        width: logoDims.width,
+        height: logoDims.height,
+    });
+
+    // Add Title
+    page.drawText('Responsiva de Activo Fijo', {
+        x: 50,
+        y: height - 150,
+        font,
+        size: 18,
+        color: rgb(0, 0, 0),
+    });
+
+    // Add Asset Details
+    const textY = height - 200;
+    const details = [
+        `Fecha: ${new Date().toLocaleDateString()}`,
+        `ID del Activo: ${payload.assetId}`,
+        `Nombre del Activo: ${catalogItem.name}`,
+        `SKU: ${catalogItem.sku}`,
+        `Responsable: ${payload.responsibleName} (${payload.responsibleEmail})`,
+        `Condiciones: ${payload.conditions}`,
+    ];
+
+    details.forEach((line, i) => {
+        page.drawText(line, {
+            x: 50,
+            y: textY - (i * 20),
+            font,
+            size: fontSize,
+            color: rgb(0.2, 0.2, 0.2),
+        });
+    });
+
+    // Add Signature Lines
+    const signatureY = 150;
+    page.drawText('_________________________', { x: 50, y: signatureY, font, size: fontSize });
+    page.drawText('Firma del Colaborador', { x: 70, y: signatureY - 15, font, size: 10 });
+
+    page.drawText('_________________________', { x: width - 200, y: signatureY, font, size: fontSize });
+    page.drawText('Firma de Quien Entrega', { x: width - 180, y: signatureY - 15, font, size: 10 });
+
+    // Save and Download
+    const pdfBytes = await pdfDoc.save();
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `Responsiva_${payload.assetId}.pdf`;
+    link.click();
+};
+
     // En script.js
 
 // 1. Añade esta nueva función de renderizado
@@ -633,6 +702,9 @@ if (newAssetForm) {
                 const errorData = await response.json();
                 throw new Error(errorData.error || 'No se pudo generar la responsiva.');
             }
+
+            const catalogItem = appState.catalog.find(item => item.id === payload.assetId);
+            await generatePDF(payload, catalogItem); // Call the PDF generation function
 
             showToast('Responsiva generada con éxito.');
             newAssetForm.reset();
