@@ -119,15 +119,14 @@ if (userRole !== 'admin' && userRole !== 'supervisor') {
             }
             // --- FIN DE LA LÓGICA FEFO ---
 
-            await sheets.spreadsheets.values.append({
-                spreadsheetId,
-                range: 'MOVIMIENTOS!A1',
-                valueInputOption: 'USER_ENTERED',
-                resource: {
-// CÓDIGO CORREGIDO
-values: [
-    ['MOV-' + new Date().getTime(), new Date().toISOString(), itemId, 'Salida', Math.abs(quantityToDispense), '', '', '', '', '', '', approverEmail]
-],
+                    await sheets.spreadsheets.values.append({
+                                    spreadsheetId,
+                                    range: 'MOVIMIENTOS!A1',
+                                    valueInputOption: 'USER_ENTERED',
+                                    resource: {
+                    values: [
+                        ['MOV-' + new Date().getTime(), new Date().toISOString(), itemId, 'Salida', Math.abs(quantityToDispense), '', '', '', '', '', '', approverEmail]
+                    ],
                 },
             });
 
