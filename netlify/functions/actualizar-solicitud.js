@@ -130,12 +130,16 @@ if (userRole !== 'admin' && userRole !== 'supervisor') {
                 },
             });
 
-            // --- ENVÍO DE CORREO DE CONFIRMACIÓN ---
+// --- ENVÍO DE CORREO DE CONFIRMACIÓN ---
+            const originalQuantity = requestData[4]; // Obtenemos la cantidad original solicitada
+            const itemName = requestData[3]; // Obtenemos el ID/Nombre del insumo
+            
             await transporter.sendMail({
                 from: `"Sistema de Inventarios" <${process.env.SMTP_USER}>`,
                 to: requesterEmail,
                 subject: `Tu solicitud ${requestId} ha sido aprobada`,
-                html: `<p>Hola,</p><p>Tu solicitud de <strong>${quantity} x ${itemId}</strong> ha sido aprobada y está lista para ser entregada.</p><p>Saludos,<br>El equipo de Administración.</p>`,
+                // Usamos la variable "originalQuantity" para mostrar la cantidad correcta.
+                html: `<p>Hola,</p><p>Tu solicitud de <strong>${originalQuantity} x ${itemName}</strong> ha sido aprobada y está lista para ser entregada.</p><p>Saludos,<br>El equipo de Administración.</p>`,
             });
             // --- FIN DEL ENVÍO DE CORREO ---
 
