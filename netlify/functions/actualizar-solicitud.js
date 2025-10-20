@@ -126,7 +126,7 @@ if (userRole !== 'admin' && userRole !== 'supervisor') {
                 resource: {
 // CÓDIGO CORREGIDO
 values: [
-    ['MOV-' + new Date().getTime(), new Date().toISOString(), itemId, 'Salida', Math.abs(quantity), '', '', '', '', '', '', approverEmail]
+    ['MOV-' + new Date().getTime(), new Date().toISOString(), itemId, 'Salida', Math.abs(quantityToDispense), '', '', '', '', '', '', approverEmail]
 ],
                 },
             });
