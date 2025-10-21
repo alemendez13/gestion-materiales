@@ -201,7 +201,7 @@ const generatePDF = async (payload, catalogItem) => {
     const logoImageBytes = await fetch(logoUrl).then(res => res.arrayBuffer());
     const logoImage = await pdfDoc.embedPng(logoImageBytes);
 // SE REDUCE EL VALOR DE 0.25 A 0.15 PARA HACER EL LOGO MÁS PEQUEÑO
-    const logoDims = logoImage.scale(0.15);
+    const logoDims = logoImage.scale(0.5);
     page.drawImage(logoImage, {
         x: 50,
         y: height - logoDims.height - 50,
@@ -218,15 +218,14 @@ const generatePDF = async (payload, catalogItem) => {
 // SE CALCULA LA POSICIÓN X PARA CENTRAR EL TÍTULO
         x: (width - titleWidth) / 2, 
         // SE AJUSTA LA POSICIÓN Y PARA COLOCARLO DEBAJO DEL LOGO (APROX. 4 LÍNEAS = 80 PUNTOS)
-        y: height - logoDims.height - 50 - 80, 
+        y: height - logoDims.height - 50 - 200, 
         font,
         size: titleSize,
         color: rgb(0, 0, 0),
     });
 
     // Add Asset Details
-// SE AUMENTA EL VALOR RESTADO (DE 200 A 240) PARA BAJAR TODO EL BLOQUE DE TEXTO
-    const textY = height - 240;
+    const textY = height - 500;
     const details = [
         `Fecha: ${new Date().toLocaleDateString()}`,
         `ID del Activo: ${payload.assetId}`,
