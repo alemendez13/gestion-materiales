@@ -200,7 +200,8 @@ const generatePDF = async (payload, catalogItem) => {
     const logoUrl = 'logo.png';
     const logoImageBytes = await fetch(logoUrl).then(res => res.arrayBuffer());
     const logoImage = await pdfDoc.embedPng(logoImageBytes);
-    const logoDims = logoImage.scale(0.25);
+// SE REDUCE EL VALOR DE 0.25 A 0.15 PARA HACER EL LOGO MÁS PEQUEÑO
+    const logoDims = logoImage.scale(0.15);
     page.drawImage(logoImage, {
         x: 50,
         y: height - logoDims.height - 50,
@@ -208,17 +209,24 @@ const generatePDF = async (payload, catalogItem) => {
         height: logoDims.height,
     });
 
-    // Add Title
+// Add Title
+    const title = 'Responsiva de Activo Fijo';
+    const titleSize = 18;
+    const titleWidth = font.widthOfTextAtSize(title, titleSize);
+
     page.drawText('Responsiva de Activo Fijo', {
-        x: 50,
-        y: height - 150,
+// SE CALCULA LA POSICIÓN X PARA CENTRAR EL TÍTULO
+        x: (width - titleWidth) / 2, 
+        // SE AJUSTA LA POSICIÓN Y PARA COLOCARLO DEBAJO DEL LOGO (APROX. 4 LÍNEAS = 80 PUNTOS)
+        y: height - logoDims.height - 50 - 80, 
         font,
-        size: 18,
+        size: titleSize,
         color: rgb(0, 0, 0),
     });
 
     // Add Asset Details
-    const textY = height - 200;
+// SE AUMENTA EL VALOR RESTADO (DE 200 A 240) PARA BAJAR TODO EL BLOQUE DE TEXTO
+    const textY = height - 240;
     const details = [
         `Fecha: ${new Date().toLocaleDateString()}`,
         `ID del Activo: ${payload.assetId}`,
