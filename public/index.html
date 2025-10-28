@@ -59,6 +59,29 @@
                             </button>
                         </form>
                     </div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm max-w-lg mx-auto mt-8">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-4 border-t pt-4">Solicitar Compra de Nuevo Insumo</h3>
+                        <p class="text-sm text-gray-500 mb-4">Usa este formulario si el producto que necesitas no está en el catálogo.</p>
+                        <form id="new-purchase-request-form">
+                            <div class="mb-4">
+                                <label for="purchase-item-name" class="block text-gray-700">Nombre del Producto*:</label>
+                                <input type="text" id="purchase-item-name" required class="w-full mt-1 p-2 border border-gray-300 rounded-md">
+                            </div>
+                            <div class="mb-4">
+                                <label for="purchase-quantity" class="block text-gray-700">Cantidad Estimada*:</label>
+                                <input type="number" id="purchase-quantity" min="1" required class="w-full mt-1 p-2 border rounded-md">
+                            </div>
+                            <div class="mb-4">
+                                <label for="purchase-justification" class="block text-gray-700">Justificación / Descripción:</label>
+                                <textarea id="purchase-justification" rows="3" class="w-full mt-1 p-2 border border-gray-300 rounded-md" placeholder="Ej: Para el nuevo proyecto de marketing..."></textarea>
+                            </div>
+                            <div class="mb-4">
+                                <label for="purchase-specifications" class="block text-gray-700">Especificaciones Técnicas:</label>
+                                <textarea id="purchase-specifications" rows="3" class="w-full mt-1 p-2 border border-gray-300 rounded-md" placeholder="Ej: Color negro, 16GB RAM, conector USB-C..."></textarea>
+                            </div>
+                            <button type="submit" class="w-full bg-orange-500 text-white p-2 rounded-md hover:bg-orange-600">Enviar Solicitud de Compra</button>
+                        </form>
+                    </div>
                 </section>
                 
                 <section id="admin-view" class="view hidden">

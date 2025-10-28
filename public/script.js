@@ -641,6 +641,47 @@ const populateAssetDropdown = () => {
 
         // En script.js, dentro del DOMContentLoaded, junto a los otros listeners
 
+// --- EVENT LISTENER PARA NUEVA SOLICITUD DE COMPRA ---
+const newPurchaseRequestForm = document.getElementById('new-purchase-request-form');
+if (newPurchaseRequestForm) {
+    newPurchaseRequestForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const button = e.target.querySelector('button');
+        button.disabled = true;
+        button.textContent = 'Enviando...';
+
+        const payload = {
+            itemName: document.getElementById('purchase-item-name').value,
+            quantity: parseInt(document.getElementById('purchase-quantity').value),
+            justification: document.getElementById('purchase-justification').value,
+            especificaciones: document.getElementById('purchase-specifications').value,
+            userEmail: userEmail // El email del usuario logueado
+        };
+
+        try {
+            const response = await fetch('/.netlify/functions/crear-solicitud-compra', {
+                method: 'POST',
+                body: JSON.stringify(payload),
+                headers: { 'x-api-key': APP_API_KEY, 'Content-Type': 'application/json' }
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'No se pudo enviar la solicitud de compra.');
+            }
+
+            showToast('Solicitud de compra enviada con éxito.');
+            newPurchaseRequestForm.reset();
+        } catch (error) {
+            showToast(error.message, true);
+        } finally {
+            button.disabled = false;
+            button.textContent = 'Enviar Solicitud de Compra';
+        }
+    });
+}
+
+
 // --- INICIO DEL NUEVO LISTENER PARA EXPORTAR ---
 const exportAssetsBtn = document.getElementById('export-assets-btn');
 if (exportAssetsBtn) {
