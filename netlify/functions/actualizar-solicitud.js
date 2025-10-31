@@ -67,10 +67,10 @@ if (userRole !== 'admin' && userRole !== 'supervisor') {
         const timestamp = new Date().toISOString();
         const response = await sheets.spreadsheets.values.get({
             spreadsheetId,
-            range: 'SOLICITUDES!A:E',
+            range: 'SOLICITUDES!A:H',
         });
 
-        const rows = response.data.values;
+const rows = response.data.values;
         const rowIndex = rows.findIndex(row => row[0] === requestId);
 
         if (rowIndex === -1) {
@@ -84,31 +84,26 @@ if (userRole !== 'admin' && userRole !== 'supervisor') {
 
         if (action === 'Aprobada') {
 // --- INICIO DE LA LÓGICA FEFO ---
-            
-            // 1. Leer todos los lotes disponibles para el insumo solicitado.
+// 1. Se declara la variable de cantidad original AL PRINCIPIO.
+            const originalQuantity = parseInt(requestData[4]);
+
+            // Lógica FEFO (sin cambios, ya era correcta)
             const lotsResponse = await sheets.spreadsheets.values.get({ spreadsheetId, range: 'LOTES!A:F' });
             let allLots = (lotsResponse.data.values || []).slice(1);
-
             let availableLots = allLots
-                .map((row, index) => ({ data: row, originalIndex: index + 2 })) // Guardamos el índice original
+                .map((row, index) => ({ data: row, originalIndex: index + 2 }))
                 .filter(lot => lot.data[1] === itemId && parseInt(lot.data[3]) > 0);
 
             if (availableLots.length > 0) {
-                // 2. Ordenar los lotes por fecha de caducidad (el más próximo primero).
                 availableLots.sort((a, b) => new Date(a.data[4]) - new Date(b.data[4]));
                 
-                // 3. Descontar la cantidad de los lotes, empezando por el más próximo a caducar.
                 for (const lot of availableLots) {
                     if (quantityToDispense <= 0) break;
-
-                    const lotId = lot.data[0];
                     let lotAvailableQty = parseInt(lot.data[3]);
                     const dispenseFromThisLot = Math.min(quantityToDispense, lotAvailableQty);
-
                     lotAvailableQty -= dispenseFromThisLot;
                     quantityToDispense -= dispenseFromThisLot;
 
-                    // Actualizar la cantidad disponible en la hoja LOTES
                     await sheets.spreadsheets.values.update({
                         spreadsheetId,
                         range: `LOTES!D${lot.originalIndex}`,
@@ -117,29 +112,25 @@ if (userRole !== 'admin' && userRole !== 'supervisor') {
                     });
                 }
             }
-            // --- FIN DE LA LÓGICA FEFO ---
-
-                    await sheets.spreadsheets.values.append({
-                                    spreadsheetId,
-                                    range: 'MOVIMIENTOS!A1',
-                                    valueInputOption: 'USER_ENTERED',
-                                    resource: {
+            
+            // 2. Se registra el movimiento de salida usando la variable correcta 'originalQuantity'.
+            await sheets.spreadsheets.values.append({
+                spreadsheetId,
+                range: 'MOVIMIENTOS!A1',
+                valueInputOption: 'USER_ENTERED',
+                resource: {
                     values: [
-                        ['MOV-' + new Date().getTime(), new Date().toISOString(), itemId, 'Salida', Math.abs(quantityToDispense), '', '', '', '', '', '', approverEmail]
+                        ['MOV-' + new Date().getTime(), new Date().toISOString(), itemId, 'Salida', originalQuantity, '', '', '', '', '', '', approverEmail]
                     ],
                 },
             });
 
-// --- ENVÍO DE CORREO DE CONFIRMACIÓN ---
-            const originalQuantity = requestData[4]; // Obtenemos la cantidad original solicitada
-            const itemName = requestData[3]; // Obtenemos el ID/Nombre del insumo
-            
+            // 3. Se envía el correo usando la variable correcta 'originalQuantity'.
             await transporter.sendMail({
                 from: `"Sistema de Inventarios" <${process.env.SMTP_USER}>`,
                 to: requesterEmail,
                 subject: `Tu solicitud ${requestId} ha sido aprobada`,
-                // Usamos la variable "originalQuantity" para mostrar la cantidad correcta.
-                html: `<p>Hola,</p><p>Tu solicitud de <strong>${originalQuantity} x ${itemName}</strong> ha sido aprobada y está lista para ser entregada.</p><p>Saludos,<br>El equipo de Administración.</p>`,
+                html: `<p>Hola,</p><p>Tu solicitud de <strong>${originalQuantity} x ${itemId}</strong> ha sido aprobada y está lista para ser entregada.</p><p>Saludos,<br>El equipo de Administración.</p>`,
             });
             // --- FIN DEL ENVÍO DE CORREO ---
 
