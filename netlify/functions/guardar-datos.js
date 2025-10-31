@@ -50,6 +50,15 @@ try {
          return { statusCode: 400, body: JSON.stringify({ error: 'Faltan datos en la solicitud.' }) };
     }
     
+    // --- INICIO DE LA MODIFICACIÓN 6 ---
+// AÑADIR esta validación de cantidad
+    
+    const quantity = parseInt(item.quantity);
+    if (isNaN(quantity) || quantity <= 0) {
+        return { statusCode: 400, body: JSON.stringify({ error: 'La cantidad debe ser un número mayor a cero.' }) };
+    }
+// --- FIN DE LA MODIFICACIÓN 6 ---
+
     // --- CORRECCIÓN 3: Usar 'userEmail' y el email del payload ('item.email') ---
     // Verificamos que el email de la solicitud coincida con el del usuario autenticado
     if (item.email.toLowerCase() !== userEmail.toLowerCase()) {
@@ -66,7 +75,7 @@ try {
         resource: {
             values: [
                 // --- CORRECCIÓN 4: Usar 'item' para guardar los datos ---
-                [item.id, item.timestamp, item.email, item.item, item.quantity, 'Pendiente', '', '']
+                [item.id, item.timestamp, item.email, item.item, quantity, 'Pendiente']
             ],
         },
     });
