@@ -66,7 +66,7 @@ try {
         resource: {
             values: [
                 // --- CORRECCIÓN 4: Usar 'item' para guardar los datos ---
-                [item.id, item.timestamp, item.email, item.item, item.quantity, 'Pendiente']
+                [item.id, item.timestamp, item.email, item.item, item.quantity, 'Pendiente', '', '']
             ],
         },
     });
