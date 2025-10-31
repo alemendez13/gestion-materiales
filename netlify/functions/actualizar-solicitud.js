@@ -82,37 +82,22 @@ if (userRole !== 'admin' && userRole !== 'supervisor') {
         let quantityToDispense = parseInt(requestData[4]);
         const requesterEmail = requestData[2];
 
-            // --- INICIO DE LA MODIFICACIÓN 2 ---
-// Vamos a mover la lectura de lotes aquí ARRIBA y AÑADIR una validación
-
-        // 1. Leer todos los lotes disponibles para el insumo solicitado.
-        const lotsResponse = await sheets.spreadsheets.values.get({ spreadsheetId, range: 'LOTES!A:F' });
-        let allLots = (lotsResponse.data.values || []).slice(1);
-
-        let availableLots = allLots
-            .map((row, index) => ({ data: row, originalIndex: index + 2 })) // Guardamos el índice original
-            .filter(lot => lot.data[1] === itemId && parseInt(lot.data[3]) > 0);
-
-        // 2. Ordenar los lotes por fecha de caducidad (el más próximo primero).
-        if (availableLots.length > 0) {
-            availableLots.sort((a, b) => new Date(a.data[4]) - new Date(b.data[4]));
-        }
-
-        // 3. ¡NUEVA VALIDACIÓN! Sumar el stock total y comparar.
-        const totalStockAvailable = availableLots.reduce((acc, lot) => acc + parseInt(lot.data[3] || 0), 0);
-
         if (action === 'Aprobada') {
-
-            // Comprobar si tenemos suficiente stock ANTES de hacer nada
-            if (totalStockAvailable < quantityToDispense) {
-                return { 
-                    statusCode: 400, // Error de "Solicitud Incorrecta"
-                    body: JSON.stringify({ error: `Stock insuficiente. Solicitados: ${quantityToDispense}, Disponibles: ${totalStockAvailable}` }) 
-                };
-            }
-// --- FIN DE LA MODIFICACIÓN 2 ---
 // --- INICIO DE LA LÓGICA FEFO ---
             
+            // 1. Leer todos los lotes disponibles para el insumo solicitado.
+            const lotsResponse = await sheets.spreadsheets.values.get({ spreadsheetId, range: 'LOTES!A:F' });
+            let allLots = (lotsResponse.data.values || []).slice(1);
+
+            let availableLots = allLots
+                .map((row, index) => ({ data: row, originalIndex: index + 2 })) // Guardamos el índice original
+                .filter(lot => lot.data[1] === itemId && parseInt(lot.data[3]) > 0);
+
+            if (availableLots.length > 0) {
+                // 2. Ordenar los lotes por fecha de caducidad (el más próximo primero).
+                availableLots.sort((a, b) => new Date(a.data[4]) - new Date(b.data[4]));
+                
+                // 3. Descontar la cantidad de los lotes, empezando por el más próximo a caducar.
                 for (const lot of availableLots) {
                     if (quantityToDispense <= 0) break;
 
@@ -131,6 +116,7 @@ if (userRole !== 'admin' && userRole !== 'supervisor') {
                         resource: { values: [[lotAvailableQty]] },
                     });
                 }
+            }
             // --- FIN DE LA LÓGICA FEFO ---
 
                     await sheets.spreadsheets.values.append({

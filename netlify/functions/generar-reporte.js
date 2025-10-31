@@ -44,13 +44,11 @@ exports.handler = async (event) => {
         // Leemos catálogo, movimientos y solicitudes para un cálculo completo
         const [catalogRes, movementsRes] = await Promise.all([
             sheets.spreadsheets.values.get({ spreadsheetId: process.env.GOOGLE_SHEET_ID, range: 'CATALOGO_INSUMOS!A:M' }),
-            sheets.spreadsheets.values.get({ spreadsheetId: process.env.GOOGLE_SHEET_ID, range: 'MOVIMIENTOS!A:L' }),
-            sheets.spreadsheets.values.get({ spreadsheetId: process.env.GOOGLE_SHEET_ID, range: 'LOTES!A:F' }) // <- AÑADIDO
+            sheets.spreadsheets.values.get({ spreadsheetId: process.env.GOOGLE_SHEET_ID, range: 'MOVIMIENTOS!A:L' })
         ]);
 
         const catalogRows = (catalogRes.data.values || []).slice(1);
         const movementRows = (movementsRes.data.values || []).slice(1);
-        const lotesRows = (lotesRes.data.values || []).slice(1); // <- AÑADIDO
 
         if (catalogRows.length === 0) {
             return { statusCode: 200, body: JSON.stringify({ totalInventoryValue: 0, lowStockItems: [], expiringItems: [] }) };
@@ -84,6 +82,25 @@ exports.handler = async (event) => {
                 currentState.stock += quantity;
                 currentState.totalValue += quantity * cost;
 
+
+                                // --- INICIO DE LA NUEVA LÓGICA DE CADUCIDAD ---
+                if (expirationDateStr) {
+                    const expirationDate = new Date(expirationDateStr);
+                    // Add a check to ensure date is valid
+                    if (!isNaN(expirationDate.getTime()) && expirationDate <= thresholdDate) {
+                        const catalogItem = catalogRows.find(row => row[1] === itemId);
+                        const itemName = catalogItem ? catalogItem[3] : 'Desconocido';
+                        
+                        expiringItems.push({
+                            name: itemName,
+                            quantity: quantity,
+                            expirationDate: expirationDate.toLocaleDateString('es-MX') // Formato dd/mm/aaaa
+                        });
+                    }
+                }
+                // --- FIN DE LA NUEVA LÓGICA DE CADUCIDAD ---
+            
+
             } else if (type === 'Salida') {
                 // Calcular el costo promedio ponderado en el momento de la salida.
                 const weightedAverageCost = currentState.stock > 0 ? currentState.totalValue / currentState.stock : 0;
@@ -93,32 +110,6 @@ exports.handler = async (event) => {
                 currentState.totalValue -= quantity * weightedAverageCost;
             }
         });
-
-        // --- AÑADE ESTE NUEVO BLOQUE DESPUÉS DEL BUCLE 'movementRows.forEach' ---
-        // 2. NUEVA LÓGICA DE CADUCIDAD (CORREGIDA)
-        // Leemos la hoja de LOTES para ver el stock real por caducidad
-        lotesRows.forEach(lote => {
-            const itemId = lote[1]; // B: ID_Insumo
-            const availableQty = parseInt(lote[3]); // D: Cantidad_Disponible
-            const expirationDateStr = lote[4]; // E: Fecha_Caducidad
-
-            // Si al lote le queda stock y tiene fecha de caducidad
-            if (availableQty > 0 && expirationDateStr) {
-                const expirationDate = new Date(expirationDateStr);
-                // Si la fecha es válida y está dentro de nuestro umbral de 30 días
-                if (!isNaN(expirationDate.getTime()) && expirationDate <= thresholdDate) {
-                    const catalogItem = catalogRows.find(row => row[1] === itemId);
-                    const itemName = catalogItem ? catalogItem[3] : 'Desconocido';
-                    
-                    expiringItems.push({
-                        name: itemName,
-                        quantity: availableQty, // Usamos la cantidad DISPONIBLE
-                        expirationDate: expirationDate.toLocaleDateString('es-MX')
-                    });
-                }
-            }
-        });
-        // --- FIN DE LA MODIFICACIÓN 3 ---
 
         let totalInventoryValue = 0;
         const lowStockItems = [];

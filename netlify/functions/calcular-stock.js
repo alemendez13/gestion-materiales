@@ -36,7 +36,25 @@ function calcularStockActual(insumoId, movimientos, solicitudes) {
     // Esta lógica se utiliza para mostrar el stock 'comprometido' o 'realmente disponible'
     // El sistema debe garantizar que si una solicitud está aprobada, ese insumo ya no está disponible
     // para ser solicitado por alguien más, hasta que se registre la salida física (Movimiento).
+    for (const solicitud of solicitudes) {
+        // Asume que la columna ID_Insumo en SOLICITUDES puede ser un número o una cadena (ej. '1' o 'INS-...')
+        if (solicitud.ID_Insumo == insumoId && solicitud.Estatus === 'Aprobada') {
+            // Se debe verificar si ya existe un movimiento de salida para esta solicitud.
+            const movimientoDeSalidaExiste = movimientos.some(mov =>
+                mov.ID_Solicitud === solicitud.ID_Solicitud && mov.Tipo_Movimiento === 'Salida'
+            );
 
+            if (!movimientoDeSalidaExiste) {
+                const cantidadSolicitada = parseInt(solicitud.Cantidad_Solicitada);
+                if (!isNaN(cantidadSolicitada)) {
+                    // Restar la cantidad solicitada (stock comprometido)
+                    stock -= cantidadSolicitada;
+                } else {
+                    console.warn(`Solicitud ${solicitud.ID_Solicitud} tiene Cantidad_Solicitada no válida: ${solicitud.Cantidad_Solicitada}`);
+                }
+            }
+        }
+    }
 
     return stock;
 }
