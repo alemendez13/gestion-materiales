@@ -7,247 +7,273 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-    <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
-</head>
+    </head>
 <body class="bg-gray-100 font-sans">
-    <div id="app" class="flex h-screen">
-        <nav id="sidebar" class="w-64 bg-white shadow-md">
-            <div class="p-4 border-b">
-                <img src="logo.png" alt="Logo de la Empresa" class="w-32 mx-auto mb-4">
-                <h1 class="text-2xl font-bold text-gray-800">Inventario</h1>
-            </div>
-            <ul id="main-nav" class="mt-4 hidden">
-                <li><a href="#" class="nav-link active" data-view="dashboard-view"><span class="material-icons">dashboard</span>Dashboard</a></li>
-                <li><a href="#" class="nav-link" data-view="new-request-view"><span class="material-icons">add_shopping_cart</span>Nueva Solicitud</a></li>
-                <li id="admin-nav-link" class="hidden"><a href="#" class="nav-link" data-view="admin-view"><span class="material-icons">admin_panel_settings</span>Administración</a></li>
-                <li id="reports-nav-link" class="hidden"><a href="#" class="nav-link" data-view="reports-view"><span class="material-icons">assessment</span>Reportes</a></li>
-                <li><a href="#" class="nav-link" data-view="inventory-view"><span class="material-icons">inventory</span>Inventario General</a></li>
-            </ul>
-        </nav>
 
-        <main id="main-content" class="flex-1 p-6 overflow-y-auto hidden">
-            <div id="loader" class="flex justify-center items-center h-full">
-                <div class="loader ease-linear rounded-full border-8 border-t-8 border-gray-200 h-32 w-32"></div>
-            </div>
-            <div id="content" class="hidden">
-                
-                <section id="dashboard-view" class="view hidden">
-                    <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-3xl font-semibold text-gray-700">Mis Solicitudes</h2>
-                        <div class="w-1/3">
-                            <input type="search" id="search-input" placeholder="Buscar por insumo o estatus..." class="w-full p-2 border border-gray-300 rounded-md">
-                        </div>
-                    </div>
-                    <div id="requests-table-container" class="bg-white p-6 rounded-lg shadow-sm"></div>
-                </section>
-               
-                <section id="new-request-view" class="view hidden">
-                    <h2 class="text-3xl font-semibold text-gray-700 mb-4">Crear Nueva Solicitud</h2>
-                    <div class="bg-white p-6 rounded-lg shadow-sm max-w-lg mx-auto">
-                        <form id="new-request-form">
-                            <div class="mb-4">
-                                <label for="item-select" class="block text-gray-700">Insumo:</label>
-                                <select id="item-select" required class="w-full mt-1 p-2 border border-gray-300 rounded-md"></select>
-                            </div>
-                            <div class="mb-4">
-                                <label for="quantity-input" class="block text-gray-700">Cantidad:</label>
-                                <input type="number" id="quantity-input" min="1" required class="w-full mt-1 p-2 border rounded-md">
-                            </div>
-                            <button id="submit-button" type="submit" class="w-full bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600">
-                                <span id="button-text">Enviar Solicitud</span>
-                                <div id="button-loader" class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-6 w-6 mx-auto hidden"></div>
-                            </button>
-                        </form>
-                    </div>
-                    <div class="bg-white p-6 rounded-lg shadow-sm max-w-lg mx-auto mt-8">
-                        <h3 class="text-xl font-semibold text-gray-700 mb-4 border-t pt-4">Solicitar Compra de Nuevo Insumo</h3>
-                        <p class="text-sm text-gray-500 mb-4">Usa este formulario si el producto que necesitas no está en el catálogo.</p>
-                        <form id="new-purchase-request-form">
-                            <div class="mb-4">
-                                <label for="purchase-item-name" class="block text-gray-700">Nombre del Producto*:</label>
-                                <input type="text" id="purchase-item-name" required class="w-full mt-1 p-2 border border-gray-300 rounded-md">
-                            </div>
-                            <div class="mb-4">
-                                <label for="purchase-quantity" class="block text-gray-700">Cantidad Estimada*:</label>
-                                <input type="number" id="purchase-quantity" min="1" required class="w-full mt-1 p-2 border rounded-md">
-                            </div>
-                            <div class="mb-4">
-                                <label for="purchase-justification" class="block text-gray-700">Justificación / Descripción:</label>
-                                <textarea id="purchase-justification" rows="3" class="w-full mt-1 p-2 border border-gray-300 rounded-md" placeholder="Ej: Para el nuevo proyecto de marketing..."></textarea>
-                            </div>
-                            <div class="mb-4">
-                                <label for="purchase-specifications" class="block text-gray-700">Especificaciones Técnicas:</label>
-                                <textarea id="purchase-specifications" rows="3" class="w-full mt-1 p-2 border border-gray-300 rounded-md" placeholder="Ej: Color negro, 16GB RAM, conector USB-C..."></textarea>
-                            </div>
-                            <button type="submit" class="w-full bg-orange-500 text-white p-2 rounded-md hover:bg-orange-600">Enviar Solicitud de Compra</button>
-                        </form>
-                    </div>
-                </section>
-                
-                <section id="admin-view" class="view hidden">
-                    <h2 class="text-3xl font-semibold text-gray-700 mb-4">Panel de Administración</h2>
-                    <div id="pending-requests-container" class="bg-white p-6 rounded-lg shadow-sm"></div>
-                    <div class="bg-white p-6 rounded-lg shadow-sm mt-8">
-                        <h3 class="text-xl font-semibold text-gray-800 mb-4">Registrar Entrada de Mercancía</h3>
-                        <form id="new-entry-form">
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div>
-                                <label for="entry-item-select" class="block text-sm font-medium text-gray-700">Insumo*</label>
-                                <select id="entry-item-select" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md"></select>
-                            </div>
-                            <div>
-                                <label for="entry-quantity" class="block text-sm font-medium text-gray-700">Cantidad*</label>
-                                <input type="number" id="entry-quantity" min="1" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md">
-                            </div>
-                            <div>
-                                <label for="entry-cost" class="block text-sm font-medium text-gray-700">Costo Unitario*</label>
-                                <input type="number" id="entry-cost" min="0" step="0.01" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md">
-                            </div>
-                            <div>
-                                <label for="entry-provider" class="block text-sm font-medium text-gray-700">Proveedor</label>
-                                <input type="text" id="entry-provider" class="mt-1 block w-full p-2 border border-gray-300 rounded-md">
-                            </div>
-                            <div>
-                                <label for="entry-invoice" class="block text-sm font-medium text-gray-700">N° de Factura</label>
-                                <input type="text" id="entry-invoice" class="mt-1 block w-full p-2 border border-gray-300 rounded-md">
-                            </div>
-                            <div>
-                                <label for="entry-expiration" class="block text-sm font-medium text-gray-700">Fecha de Caducidad</label>
-                                <input type="date" id="entry-expiration" class="mt-1 block w-full p-2 border border-gray-300 rounded-md">
-                            </div>
-                            <div class="col-span-full">
-                                <label for="entry-serial" class="block text-sm font-medium text-gray-700">N° de Serie (si aplica)</label>
-                                <input type="text" id="entry-serial" class="mt-1 block w-full p-2 border border-gray-300 rounded-md">
-                            </div>
-                        </div>
-                        <div class="mt-4">
-                            <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600">Registrar Entrada</button>
-                        </div>
-                        </form>
-                    </div>
-                    <div class="bg-white p-6 rounded-lg shadow-sm mt-8">
-                        <h3 class="text-xl font-semibold text-gray-800 mb-4">Añadir Nuevo Insumo al Catálogo</h3>
-                        <form id="new-catalog-item-form">
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label for="item-name-input" class="block text-sm font-medium text-gray-700">Nombre del Producto*</label>
-                                    <input type="text" id="item-name-input" required class="mt-1 block w-full p-2 border rounded-md">
-                                </div>
-                                <div>
-                                    <label for="item-sku-input" class="block text-sm font-medium text-gray-700">SKU*</label>
-                                    <input type="text" id="item-sku-input" required class="mt-1 block w-full p-2 border rounded-md">
-                                </div>
-                                <div>
-                                    <label for="item-family-input" class="block text-sm font-medium text-gray-700">Familia*</label>
-                                    <input type="text" id="item-family-input" required class="mt-1 block w-full p-2 border rounded-md">
-                                </div>
-                                <div>
-                                    <label for="item-unit-input" class="block text-sm font-medium text-gray-700">Unidad de Medida</label>
-                                    <input type="text" id="item-unit-input" class="mt-1 block w-full p-2 border rounded-md">
-                                </div>
-                                <div class="col-span-full">
-                                    <label for="item-desc-input" class="block text-sm font-medium text-gray-700">Descripción</label>
-                                    <textarea id="item-desc-input" rows="2" class="mt-1 block w-full p-2 border rounded-md"></textarea>
-                                </div>
-                                <div>
-                                    <label for="item-min-stock-input" class="block text-sm font-medium text-gray-700">Stock Mínimo</label>
-                                    <input type="number" id="item-min-stock-input" value="0" class="mt-1 block w-full p-2 border rounded-md">
-                                </div>
-                                <div>
-                                    <label for="item-serial-input" class="block text-sm font-medium text-gray-700">N° de Serie (si aplica)</label>
-                                    <input type="text" id="item-serial-input" class="mt-1 block w-full p-2 border rounded-md">
-                                </div>
-
-                                <div class="col-span-full flex items-center">
-                                    <input type="checkbox" id="item-is-asset-input" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                                    <label for="item-is-asset-input" class="ml-2 block text-sm text-gray-900">Marcar como Activo Fijo</label>
-                                </div>
-
-                            </div>
-                            <div class="mt-4">
-                                <button type="submit" class="bg-purple-500 text-white px-4 py-2 rounded-md hover:bg-purple-600">Añadir al Catálogo</button>
-                            </div>
-                        </form>
-                    </div>
-
-                    <div class="bg-white p-6 rounded-lg shadow-sm mt-8">
-                        <h3 class="text-xl font-semibold text-gray-800 mb-4">Generar Responsiva de Activo Fijo</h3>
-                        <form id="new-asset-assignment-form">
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label for="asset-select" class="block text-sm font-medium text-gray-700">Activo Fijo*</label>
-                                    <select id="asset-select" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md">
-                                        <option value="" disabled selected>Seleccione un activo...</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label for="responsible-name" class="block text-sm font-medium text-gray-700">Nombre del Responsable*</label>
-                                    <input type="text" id="responsible-name" required class="mt-1 block w-full p-2 border rounded-md">
-                                </div>
-                                <div class="col-span-full">
-                                    <label for="responsible-email" class="block text-sm font-medium text-gray-700">Email del Responsable*</label>
-                                    <input type="email" id="responsible-email" required class="mt-1 block w-full p-2 border rounded-md">
-                                </div>
-                                <div class="col-span-full">
-                                    <label for="asset-conditions" class="block text-sm font-medium text-gray-700">Condiciones del Equipo</label>
-                                    <textarea id="asset-conditions" rows="3" class="mt-1 block w-full p-2 border rounded-md" placeholder="Ej: Laptop con cargador original, sin rayones visibles."></textarea>
-                                </div>
-                            </div>
-                            <div class="mt-4">
-                                <button type="submit" class="bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600">Generar Responsiva</button>
-                            </div>
-                        </form>
-                    </div>
-
-    <div class="bg-white p-6 rounded-lg shadow-sm mt-8">               
-        <h3 class="text-xl font-semibold text-gray-800 mb-4">Exportar Datos</h3>
-        <p class="text-gray-600 mb-4">
-            Haz clic en el botón para exportar un listado de todos los activos fijos a la pestaña "EXPORT_ACTIVOS" en Google Sheets.
-        </p>
-        <button id="export-assets-btn" class="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600">
-            Exportar Activos
-        </button>
+    <div id="login-view" class="flex items-center justify-center h-screen">
+        <div class="bg-white p-8 rounded-lg shadow-md w-96">
+            <img src="logo.png" alt="Logo de la Empresa" class="w-32 mx-auto mb-6">
+            <h2 class="text-2xl font-bold text-center text-gray-800 mb-6">Iniciar Sesión</h2>
+            <form id="login-form">
+                <div class="mb-4">
+                    <label for="email-input" class="block text-gray-700">Tu Correo Electrónico:</label>
+                    <input type="email" id="email-input" required class="w-full mt-1 p-2 border border-gray-300 rounded-md" placeholder="tu.email@empresa.com">
+                </div>
+                <button id="login-button" type="submit" class="w-full bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600">
+                    <span id="login-button-text">Enviar Enlace de Acceso</span>
+                    <div id="login-loader" class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-6 w-6 mx-auto hidden"></div>
+                </button>
+            </form>
+            <p id="login-message" class="text-center text-sm text-gray-500 mt-4"></p>
+        </div>
     </div>
-</section>
 
-                <section id="reports-view" class="view hidden">
-                    <h2 class="text-3xl font-semibold text-gray-700 mb-4">Reportes de Inventario</h2>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="bg-white p-6 rounded-lg shadow-sm">
-                            <h3 class="text-xl font-semibold text-gray-800 mb-3">Valor Total del Inventario</h3>
-                            <p id="total-inventory-value" class="text-4xl font-bold text-blue-600">Calculando...</p>
+    <div id="app-container" class="hidden">
+        <div id="app" class="flex h-screen">
+            <nav id="sidebar" class="w-64 bg-white shadow-md">
+                <div class="p-4 border-b">
+                    <img src="logo.png" alt="Logo de la Empresa" class="w-32 mx-auto mb-4">
+                    <h1 class="text-2xl font-bold text-gray-800">Inventario</h1>
+                    <div id="user-profile-menu" class="mt-4 p-2 bg-gray-50 rounded hidden">
+                        <p id="user-email-display" class_exists="text-sm font-medium text-gray-700 truncate"></p>
+                        <p id="user-role-display" class="text-xs text-gray-500 capitalize"></p>
+                        <button id="logout-button" class="mt-2 w-full text-left text-sm text-red-600 hover:font-medium">Cerrar Sesión</button>
+                    </div>
+                </div>
+                <ul id="main-nav" class="mt-4 hidden">
+                    <li><a href="#" class="nav-link active" data-view="dashboard-view"><span class="material-icons">dashboard</span>Dashboard</a></li>
+                    <li><a href="#" class="nav-link" data-view="new-request-view"><span class="material-icons">add_shopping_cart</span>Nueva Solicitud</a></li>
+                    <li id="admin-nav-link" class="hidden"><a href="#" class="nav-link" data-view="admin-view"><span class="material-icons">admin_panel_settings</span>Administración</a></li>
+                    <li id="reports-nav-link" class="hidden"><a href="#" class="nav-link" data-view="reports-view"><span class="material-icons">assessment</span>Reportes</a></li>
+                    <li><a href="#" class="nav-link" data-view="inventory-view"><span class="material-icons">inventory</span>Inventario General</a></li>
+                </ul>
+            </nav>
+
+            <main id="main-content" class="flex-1 p-6 overflow-y-auto hidden">
+                <div id="loader" class="flex justify-center items-center h-full">
+                    <div class="loader ease-linear rounded-full border-8 border-t-8 border-gray-200 h-32 w-32"></div>
+                </div>
+                <div id="content" class="hidden">
+                    
+                    <section id="dashboard-view" class="view hidden">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-3xl font-semibold text-gray-700">Mis Solicitudes</h2>
+                            <div class="w-1/3">
+                                <input type="search" id="search-input" placeholder="Buscar por insumo o estatus..." class="w-full p-2 border border-gray-300 rounded-md">
+                            </div>
                         </div>
-                        <div class="bg-white p-6 rounded-lg shadow-sm">
-                            <h3 class="text-xl font-semibold text-gray-800 mb-3">Insumos con Stock Bajo</h3>
-                            <div id="low-stock-items-container">
-                                <p>Calculando...</p>
+                        <div id="requests-table-container" class="bg-white p-6 rounded-lg shadow-sm"></div>
+                    </section>
+                
+                    <section id="new-request-view" class="view hidden">
+                        <h2 class="text-3xl font-semibold text-gray-700 mb-4">Crear Nueva Solicitud</h2>
+                        <div class="bg-white p-6 rounded-lg shadow-sm max-w-lg mx-auto">
+                            <form id="new-request-form">
+                                <div class="mb-4">
+                                    <label for="item-select" class="block text-gray-700">Insumo:</label>
+                                    <select id="item-select" required class="w-full mt-1 p-2 border border-gray-300 rounded-md"></select>
+                                </div>
+                                <div class="mb-4">
+                                    <label for="quantity-input" class="block text-gray-700">Cantidad:</label>
+                                    <input type="number" id="quantity-input" min="1" required class="w-full mt-1 p-2 border rounded-md">
+                                </div>
+                                <button id="submit-button" type="submit" class="w-full bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600">
+                                    <span id="button-text">Enviar Solicitud</span>
+                                    <div id="button-loader" class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-6 w-6 mx-auto hidden"></div>
+                                </button>
+                            </form>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow-sm max-w-lg mx-auto mt-8">
+                            <h3 class="text-xl font-semibold text-gray-700 mb-4 border-t pt-4">Solicitar Compra de Nuevo Insumo</h3>
+                            <p class="text-sm text-gray-500 mb-4">Usa este formulario si el producto que necesitas no está en el catálogo.</p>
+                            <form id="new-purchase-request-form">
+                                <div class="mb-4">
+                                    <label for="purchase-item-name" class="block text-gray-700">Nombre del Producto*:</label>
+                                    <input type="text" id="purchase-item-name" required class="w-full mt-1 p-2 border border-gray-300 rounded-md">
+                                </div>
+                                <div class="mb-4">
+                                    <label for="purchase-quantity" class="block text-gray-700">Cantidad Estimada*:</label>
+                                    <input type="number" id="purchase-quantity" min="1" required class="w-full mt-1 p-2 border rounded-md">
+                                </div>
+                                <div class="mb-4">
+                                    <label for="purchase-justification" class="block text-gray-700">Justificación / Descripción:</label>
+                                    <textarea id="purchase-justification" rows="3" class="w-full mt-1 p-2 border border-gray-300 rounded-md" placeholder="Ej: Para el nuevo proyecto de marketing..."></textarea>
+                                </div>
+                                <div class="mb-4">
+                                    <label for="purchase-specifications" class="block text-gray-700">Especificaciones Técnicas:</label>
+                                    <textarea id="purchase-specifications" rows="3" class="w-full mt-1 p-2 border border-gray-300 rounded-md" placeholder="Ej: Color negro, 16GB RAM, conector USB-C..."></textarea>
+                                </div>
+                                <button type="submit" class="w-full bg-orange-500 text-white p-2 rounded-md hover:bg-orange-600">Enviar Solicitud de Compra</button>
+                            </form>
+                        </div>
+                    </section>
+                    
+                    <section id="admin-view" class="view hidden">
+                        <h2 class="text-3xl font-semibold text-gray-700 mb-4">Panel de Administración</h2>
+                        <div id="pending-requests-container" class="bg-white p-6 rounded-lg shadow-sm"></div>
+                        <div class="bg-white p-6 rounded-lg shadow-sm mt-8">
+                            <h3 class="text-xl font-semibold text-gray-800 mb-4">Registrar Entrada de Mercancía</h3>
+                            <form id="new-entry-form">
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <label for="entry-item-select" class="block text-sm font-medium text-gray-700">Insumo*</label>
+                                    <select id="entry-item-select" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md"></select>
+                                </div>
+                                <div>
+                                    <label for="entry-quantity" class="block text-sm font-medium text-gray-700">Cantidad*</label>
+                                    <input type="number" id="entry-quantity" min="1" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md">
+                                </div>
+                                <div>
+                                    <label for="entry-cost" class="block text-sm font-medium text-gray-700">Costo Unitario*</label>
+                                    <input type="number" id="entry-cost" min="0" step="0.01" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md">
+                                </div>
+                                <div>
+                                    <label for="entry-provider" class="block text-sm font-medium text-gray-700">Proveedor</label>
+                                    <input type="text" id="entry-provider" class="mt-1 block w-full p-2 border border-gray-300 rounded-md">
+                                </div>
+                                <div>
+                                    <label for="entry-invoice" class="block text-sm font-medium text-gray-700">N° de Factura</label>
+                                    <input type="text" id="entry-invoice" class="mt-1 block w-full p-2 border border-gray-300 rounded-md">
+                                </div>
+                                <div>
+                                    <label for="entry-expiration" class="block text-sm font-medium text-gray-700">Fecha de Caducidad</label>
+                                    <input type="date" id="entry-expiration" class="mt-1 block w-full p-2 border border-gray-300 rounded-md">
+                                </div>
+                                <div class="col-span-full">
+                                    <label for="entry-serial" class="block text-sm font-medium text-gray-700">N° de Serie (si aplica)</label>
+                                    <input type="text" id="entry-serial" class="mt-1 block w-full p-2 border border-gray-300 rounded-md">
+                                </div>
+                            </div>
+                            <div class="mt-4">
+                                <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600">Registrar Entrada</button>
+                            </div>
+                            </form>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow-sm mt-8">
+                            <h3 class="text-xl font-semibold text-gray-800 mb-4">Añadir Nuevo Insumo al Catálogo</h3>
+                            <form id="new-catalog-item-form">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label for="item-name-input" class="block text-sm font-medium text-gray-700">Nombre del Producto*</label>
+                                        <input type="text" id="item-name-input" required class="mt-1 block w-full p-2 border rounded-md">
+                                    </div>
+                                    <div>
+                                        <label for="item-sku-input" class="block text-sm font-medium text-gray-700">SKU*</label>
+                                        <input type="text" id="item-sku-input" required class="mt-1 block w-full p-2 border rounded-md">
+                                    </div>
+                                    <div>
+                                        <label for="item-family-input" class="block text-sm font-medium text-gray-700">Familia*</label>
+                                        <input type="text" id="item-family-input" required class="mt-1 block w-full p-2 border rounded-md">
+                                    </div>
+                                    <div>
+                                        <label for="item-unit-input" class="block text-sm font-medium text-gray-700">Unidad de Medida</label>
+                                        <input type="text" id="item-unit-input" class="mt-1 block w-full p-2 border rounded-md">
+                                    </div>
+                                    <div class="col-span-full">
+                                        <label for="item-desc-input" class="block text-sm font-medium text-gray-700">Descripción</label>
+                                        <textarea id="item-desc-input" rows="2" class="mt-1 block w-full p-2 border rounded-md"></textarea>
+                                    </div>
+                                    <div>
+                                        <label for="item-min-stock-input" class="block text-sm font-medium text-gray-700">Stock Mínimo</label>
+                                        <input type="number" id="item-min-stock-input" value="0" class="mt-1 block w-full p-2 border rounded-md">
+                                    </div>
+                                    <div>
+                                        <label for="item-serial-input" class="block text-sm font-medium text-gray-700">N° de Serie (si aplica)</label>
+                                        <input type="text" id="item-serial-input" class="mt-1 block w-full p-2 border rounded-md">
+                                    </div>
+
+                                    <div class="col-span-full flex items-center">
+                                        <input type="checkbox" id="item-is-asset-input" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                        <label for="item-is-asset-input" class="ml-2 block text-sm text-gray-900">Marcar como Activo Fijo</label>
+                                    </div>
+
+                                </div>
+                                <div class="mt-4">
+                                    <button type="submit" class="bg-purple-500 text-white px-4 py-2 rounded-md hover:bg-purple-600">Añadir al Catálogo</button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <div class="bg-white p-6 rounded-lg shadow-sm mt-8">
+                            <h3 class="text-xl font-semibold text-gray-800 mb-4">Generar Responsiva de Activo Fijo</h3>
+                            <form id="new-asset-assignment-form">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label for="asset-select" class="block text-sm font-medium text-gray-700">Activo Fijo*</label>
+                                        <select id="asset-select" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md">
+                                            <option value="" disabled selected>Seleccione un activo...</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label for="responsible-name" class="block text-sm font-medium text-gray-700">Nombre del Responsable*</label>
+                                        <input type="text" id="responsible-name" required class="mt-1 block w-full p-2 border rounded-md">
+                                    </div>
+                                    <div class="col-span-full">
+                                        <label for="responsible-email" class="block text-sm font-medium text-gray-700">Email del Responsable*</label>
+                                        <input type="email" id="responsible-email" required class="mt-1 block w-full p-2 border rounded-md">
+                                    </div>
+                                    <div class="col-span-full">
+                                        <label for="asset-conditions" class="block text-sm font-medium text-gray-700">Condiciones del Equipo</label>
+                                        <textarea id="asset-conditions" rows="3" class="mt-1 block w-full p-2 border rounded-md" placeholder="Ej: Laptop con cargador original, sin rayones visibles."></textarea>
+                                    </div>
+                                </div>
+                                <div class="mt-4">
+                                    <button type="submit" class="bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600">Generar Responsiva</button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <div class="bg-white p-6 rounded-lg shadow-sm mt-8">               
+                            <h3 class="text-xl font-semibold text-gray-800 mb-4">Exportar Datos</h3>
+                            <p class="text-gray-600 mb-4">
+                                Haz clic en el botón para exportar un listado de todos los activos fijos a la pestaña "EXPORT_ACTIVOS" en Google Sheets.
+                            </p>
+                            <button id="export-assets-btn" class="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600">
+                                Exportar Activos
+                            </button>
+                        </div>
+                    </section>
+
+                    <section id="reports-view" class="view hidden">
+                        <h2 class="text-3xl font-semibold text-gray-700 mb-4">Reportes de Inventario</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="bg-white p-6 rounded-lg shadow-sm">
+                                <h3 class="text-xl font-semibold text-gray-800 mb-3">Valor Total del Inventario</h3>
+                                <p id="total-inventory-value" class="text-4xl font-bold text-blue-600">Calculando...</p>
+                            </div>
+                            <div class="bg-white p-6 rounded-lg shadow-sm">
+                                <h3 class="text-xl font-semibold text-gray-800 mb-3">Insumos con Stock Bajo</h3>
+                                <div id="low-stock-items-container">
+                                    <p>Calculando...</p>
+                                </div>
                             </div>
                             <div class="bg-white p-6 rounded-lg shadow-sm col-span-1 md:col-span-2">
-                            <h3 class="text-xl font-semibold text-gray-800 mb-3">Insumos Próximos a Caducar (30 días)</h3>
-                            <div id="expiring-items-container">
-                                <p>Calculando...</p>
+                                <h3 class="text-xl font-semibold text-gray-800 mb-3">Insumos Próximos a Caducar (30 días)</h3>
+                                <div id="expiring-items-container">
+                                    <p>Calculando...</p>
+                                </div>
                             </div>
                         </div>
-                        </div>
-                    </div>
-                </section>
+                    </section>
 
-                <section id="inventory-view" class="view hidden">
-                    <h2 class="text-3xl font-semibold text-gray-700 mb-4">Inventario General</h2>
-                    <div class="bg-white p-6 rounded-lg shadow-sm">
-                        <input type="search" id="inventory-search-input" placeholder="Buscar por nombre, SKU o familia..." class="w-full p-2 border border-gray-300 rounded-md mb-4">
-                        <div id="full-inventory-container">
+                    <section id="inventory-view" class="view hidden">
+                        <h2 class="text-3xl font-semibold text-gray-700 mb-4">Inventario General</h2>
+                        <div class="bg-white p-6 rounded-lg shadow-sm">
+                            <input type="search" id="inventory-search-input" placeholder="Buscar por nombre, SKU o familia..." class="w-full p-2 border border-gray-300 rounded-md mb-4">
+                            <div id="full-inventory-container">
                             </div>
-                    </div>
-                </section>
+                        </div>
+                    </section>
 
-            </div>
-        </main>
+                </div>
+            </main>
+        </div>
     </div>
+    
     <div id="toast" class="hidden fixed bottom-5 right-5 p-4 rounded-md text-white">
         <p id="toast-message"></p>
     </div>
-    <script>window.APP_API_KEY_PUBLIC = "__APP_API_KEY__"; window.USER_ROLE = null;</script>
+    
     <script src="script.js"></script>
 </body>
 </html>
