@@ -1,7 +1,8 @@
 // RUTA: netlify/functions/crear-insumo.js
 
 const { google } = require('googleapis');
-const { getUserRole } = require('./auth');
+// NUEVO: Importar 'withAuth'
+const { withAuth } = require('./auth');
 
 const getAuth = () => new google.auth.GoogleAuth({
     credentials: {
@@ -11,29 +12,26 @@ const getAuth = () => new google.auth.GoogleAuth({
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
 });
 
-exports.handler = async (event, context) => {
+// MODIFICADO: Envolver con 'withAuth'
+exports.handler = withAuth(async (event) => {
     
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' };
     }
 
-    const apiKey = event.headers['x-api-key'];
-    if (apiKey !== process.env.APP_API_KEY) {
-        return { statusCode: 403, body: JSON.stringify({ error: 'Acceso denegado. Clave de API inválida.' }) };
-    }
-    
+    // --- BLOQUE DE SEGURIDAD ANTIGUO ELIMINADO ---
+    // La 'x-api-key' ha sido reemplazada por 'withAuth'
+
     try { 
         const item = JSON.parse(event.body);
 
-        const userEmail = item.userEmail;
-        if (!userEmail) {
-            return { statusCode: 401, body: JSON.stringify({ error: 'Email del usuario faltante en la solicitud.' }) };
-        }
+        // --- INICIO LÓGICA DE AUTENTICACIÓN MEJORADA ---
+        const userRole = event.auth.role; // Rol confiable del token
 
-        const userRole = await getUserRole(userEmail);
         if (userRole !== 'admin') {
             return { statusCode: 403, body: JSON.stringify({ error: 'Acceso denegado. No tienes permisos de administrador.' }) };
         }
+        // --- FIN LÓGICA DE AUTENTICACIÓN ---
     
         if (!item.sku || !item.name || !item.family) {
             return { statusCode: 400, body: JSON.stringify({ error: 'SKU, Nombre y Familia son obligatorios.' }) };
@@ -41,31 +39,49 @@ exports.handler = async (event, context) => {
 
         const auth = getAuth();
         const sheets = google.sheets({ version: 'v4', auth });
+
+        // --- LÓGICA ANTI-DUPLICADOS (Se mantiene del original) ---
+        
+        // 1. Leer la columna de SKUs (Columna C)
+        const catalogResponse = await sheets.spreadsheets.values.get({
+            spreadsheetId: process.env.GOOGLE_SHEET_ID,
+            range: 'CATALOGO_INSUMOS!C:C', 
+        });
+
+        const allSkus = (catalogResponse.data.values || []).flat(); 
+
+        // 2. Comprobar si el nuevo SKU ya existe
+        if (allSkus.some(sku => sku.trim().toLowerCase() === item.sku.trim().toLowerCase())) {
+            return { 
+                statusCode: 400,
+                body: JSON.stringify({ error: 'El SKU ingresado ya existe. No se puede duplicar.' }) 
+            };
+        }
+        // --- FIN LÓGICA ANTI-DUPLICADOS ---
         
         const newItemId = 'INS-' + new Date().getTime();
 
+        // --- LÓGICA DE PREVENCIÓN DE INYECCIÓN (Se mantiene del original) ---
         await sheets.spreadsheets.values.append({
             spreadsheetId: process.env.GOOGLE_SHEET_ID,
             range: 'CATALOGO_INSUMOS!A1',
             valueInputOption: 'USER_ENTERED',
             resource: {
                 values: [
-    // --- CÓDIGO FINAL Y DEFINITIVO ---
-    // Este array ahora coincide con el orden exacto de las 13 columnas de tu hoja.
-    [
-        '',                 // A: Folio (se deja vacío)
-        newItemId,          // B: ID_INSUMO
-        item.sku,           // C: SKU
-        item.name,          // D: Nombre_Producto
-        item.description,   // E: Descripcion
-        item.family,        // F: Familia
-        item.unit,          // G: Unidad_Medida
-        item.minStock,      // H: Stock_Minimo
-        item.maxStock,      // I: Stock_Maximo
-        item.location,      // J: Ubicacion
-        'Activo',           // K: Estatus (valor fijo)
-        item.isAsset || false, // L: Es_Activo (se asume un valor booleano)
-        item.serialNumber   // M: N_Serie (el nuevo campo)
+                    [
+                        '',                 // A: Folio
+                        newItemId,          // B: ID_INSUMO
+                        "'" + item.sku,     // C: SKU (AÑADE COMILLA)
+                        "'" + item.name,    // D: Nombre_Producto (AÑADE COMILLA)
+                        "'" + item.description, // E: Descripcion (AÑADE COMILLA)
+                        "'" + item.family,  // F: Familia (AÑADE COMILLA)
+                        "'" + item.unit,    // G: Unidad_Medida (AÑADE COMILLA)
+                        item.minStock,      // H: Stock_Minimo
+                        item.maxStock,      // I: Stock_Maximo
+                        "'" + item.location,// J: Ubicacion (AÑADE COMILLA)
+                        'Activo',           // K: Estatus
+                        item.isAsset || false, // L: Es_Activo
+                        "'" + item.serialNumber // M: N_Serie (AÑADE COMILLA)
                     ]
                 ],
             },
@@ -77,4 +93,4 @@ exports.handler = async (event, context) => {
         console.error('Error al crear insumo:', error);
         return { statusCode: 500, body: JSON.stringify({ error: 'Error interno del servidor.' }) };
     }
-};
+});
