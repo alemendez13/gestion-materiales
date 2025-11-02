@@ -1,5 +1,6 @@
 [build]
-  command = "sed -i 's|__APP_API_KEY__|'\"$APP_API_KEY\"'|g' public/index.html"
+  # Se ELIMINA el comando 'sed'. La clave de API ya no se inyecta en el frontend.
+  # command = "sed -i 's|__APP_API_KEY__|'\"$APP_API_KEY\"'|g' public/index.html" <--- ELIMINADO
   publish = "public"
   functions = "netlify/functions"
 
