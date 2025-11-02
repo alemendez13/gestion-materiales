@@ -1,80 +1,88 @@
 // RUTA: netlify/functions/guardar-datos.js
 
 const { google } = require('googleapis');
-// Importar auth.js (asumiendo que está en una ruta relativa)
-const { getUserRole } = require('./auth');
+// NUEVO: Importamos el envoltorio de autenticación 'withAuth'
+const { withAuth } = require('./auth');
 
-// Esta función auxiliar se mantiene igual
 const getAuth = () => {
     return new google.auth.GoogleAuth({
         credentials: {
             client_email: process.env.GOOGLE_CLIENT_EMAIL,
             private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
         },
-        scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+        // Se necesitan permisos de escritura
+        scopes: ['https://www.googleapis.com/auth/spreadsheets'], 
     });
 };
 
-exports.handler = async (event, context) => {
+// MODIFICADO: Envolvemos la función con 'withAuth'
+exports.handler = withAuth(async (event) => {
     
+    // La validación 'x-api-key' y 'httpMethod' ya no es necesaria aquí.
+    // 'withAuth' maneja la seguridad y 'netlify.toml' (o el frontend) el método.
+    // Pero mantenemos la del método por buena práctica.
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' };
     }
 
-    // --- INICIO DEL NUEVO BLOQUE DE SEGURIDAD (API KEY + GSHEETS ROLE) ---
+    // --- BLOQUE DE SEGURIDAD ELIMINADO ---
+    // La validación de 'x-api-key' y la llamada a 'getUserRole'
+    // ahora son manejadas por 'withAuth'.
 
-    // 1. Validar la Clave de API enviada en el Header 'x-api-key'
-    const apiKey = event.headers['x-api-key'];
-    if (apiKey !== process.env.APP_API_KEY) {
-        return { statusCode: 403, body: JSON.stringify({ error: 'Acceso denegado. Clave de API inválida.' }) };
-    }
+    try {
+        const item = JSON.parse(event.body);
 
-try {
-    const item = JSON.parse(event.body);
+        // --- INICIO DE LA LÓGICA DE AUTENTICACIÓN MEJORADA ---
 
-    // NOTA: El email del usuario debe ser enviado por el frontend en el cuerpo de la solicitud
-    const userEmail = item.userEmail;
-    if (!userEmail) {
-        return { statusCode: 401, body: JSON.stringify({ error: 'Email del usuario faltante en la solicitud.' }) };
-    }
+        // 1. Obtenemos el email y rol desde 'event.auth' (inyectado por withAuth)
+        // Esto soluciona la Falla S-1 (Suplantación)
+        const userEmail = event.auth.email; 
+        const userRole = event.auth.role;
 
-    // --- CORRECCIÓN 1: Validar que el usuario exista, sin importar el rol ---
-    const userRole = await getUserRole(userEmail);
-    if (!userRole) {
-        return { statusCode: 403, body: JSON.stringify({ error: 'Acceso denegado. Usuario no válido.' }) };
-    }
+        // 2. 'withAuth' ya validó que el usuario existe, así que 'userRole' es confiable.
+        // Mantenemos la lógica de que cualquier usuario puede solicitar.
+        if (!userRole) {
+            // Esta comprobación es redundante si 'withAuth' funciona, pero es una buena defensa.
+            return { statusCode: 403, body: JSON.stringify({ error: 'Acceso denegado. Usuario no válido.' }) };
+        }
     
-    // --- CORRECCIÓN 2: Usar 'item' en lugar de 'newRow' ---
-    // Validamos que los datos esenciales estén presentes
-    if (!item.id || !item.timestamp || !item.email || !item.item || !item.quantity) {
-         return { statusCode: 400, body: JSON.stringify({ error: 'Faltan datos en la solicitud.' }) };
-    }
+        // 3. Validamos los datos del payload
+        if (!item.id || !item.timestamp || !item.email || !item.item || !item.quantity) {
+             return { statusCode: 400, body: JSON.stringify({ error: 'Faltan datos en la solicitud.' }) };
+        }
     
-    // --- CORRECCIÓN 3: Usar 'userEmail' y el email del payload ('item.email') ---
-    // Verificamos que el email de la solicitud coincida con el del usuario autenticado
-    if (item.email.toLowerCase() !== userEmail.toLowerCase()) {
-        return { statusCode: 403, body: JSON.stringify({ error: 'No puedes crear solicitudes para otro usuario.' }) };
-    }
+        const quantity = parseInt(item.quantity);
+        if (isNaN(quantity) || quantity <= 0) {
+            return { statusCode: 400, body: JSON.stringify({ error: 'La cantidad debe ser un número mayor a cero.' }) };
+        }
 
-    const auth = getAuth();
-    const sheets = google.sheets({ version: 'v4', auth });
+        // 4. CORRECCIÓN DE LA FALLA M-3 (Anti-Suplantación Rota)
+        // Esta validación ahora funciona, porque 'userEmail' es del token
+        // y 'item.email' es del payload del formulario.
+        if (item.email.toLowerCase() !== userEmail.toLowerCase()) {
+            return { statusCode: 403, body: JSON.stringify({ error: 'No puedes crear solicitudes para otro usuario.' }) };
+        }
 
-    await sheets.spreadsheets.values.append({
-        spreadsheetId: process.env.GOOGLE_SHEET_ID,
-        range: 'SOLICITUDES!A1',
-        valueInputOption: 'USER_ENTERED',
-        resource: {
-            values: [
-                // --- CORRECCIÓN 4: Usar 'item' para guardar los datos ---
-                [item.id, item.timestamp, item.email, item.item, item.quantity, 'Pendiente']
-            ],
-        },
-    });
+        // --- FIN DE LA LÓGICA DE AUTENTICACIÓN ---
 
-    return { statusCode: 200, body: JSON.stringify({ message: 'Datos guardados exitosamente.' }) };
+        const auth = getAuth();
+        const sheets = google.sheets({ version: 'v4', auth });
+
+        await sheets.spreadsheets.values.append({
+            spreadsheetId: process.env.GOOGLE_SHEET_ID,
+            range: 'SOLICITUDES!A1',
+            valueInputOption: 'USER_ENTERED',
+            resource: {
+                values: [
+                    [item.id, item.timestamp, item.email, item.item, quantity, 'Pendiente']
+                ],
+            },
+        });
+
+        return { statusCode: 200, body: JSON.stringify({ message: 'Datos guardados exitosamente.' }) };
     
-} catch (error) {
-    console.error('Error al procesar la solicitud:', error);
-    return { statusCode: 500, body: JSON.stringify({ error: 'Error interno del servidor.' }) };
-}
-};
+    } catch (error) {
+        console.error('Error al procesar la solicitud:', error);
+        return { statusCode: 500, body: JSON.stringify({ error: 'Error interno del servidor.' }) };
+    }
+});
