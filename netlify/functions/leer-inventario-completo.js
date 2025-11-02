@@ -1,7 +1,8 @@
 // RUTA: netlify/functions/leer-inventario-completo.js
 
 const { google } = require('googleapis');
-const { getUserRole } = require('./auth');
+// NUEVO: Importar 'withAuth'
+const { withAuth } = require('./auth');
 
 const getAuth = () => new google.auth.GoogleAuth({
     credentials: {
@@ -11,47 +12,58 @@ const getAuth = () => new google.auth.GoogleAuth({
     scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
 });
 
-exports.handler = async (event) => {
+// MODIFICADO: Envolver con 'withAuth'
+exports.handler = withAuth(async (event) => {
     // --- Bloque de Seguridad ---
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' };
     }
-    const apiKey = event.headers['x-api-key'];
-    if (apiKey !== process.env.APP_API_KEY) {
-        return { statusCode: 403, body: JSON.stringify({ error: 'Acceso denegado.' }) };
-    }
+    
+    // --- BLOQUE DE SEGURIDAD ANTIGUO ELIMINADO ---
+    // 'withAuth' maneja la sesión. Cualquier usuario logueado puede ver el inventario.
 
     try {
-        const { userEmail } = JSON.parse(event.body);
-        if (!userEmail || !(await getUserRole(userEmail))) {
-            return { statusCode: 403, body: JSON.stringify({ error: 'Usuario no válido.' }) };
-        }
-        // --- Fin Bloque de Seguridad ---
-
         const auth = getAuth();
         const sheets = google.sheets({ version: 'v4', auth });
         const spreadsheetId = process.env.GOOGLE_SHEET_ID;
 
-        // Leer catálogo y movimientos
-        const [catalogRes, movementsRes] = await Promise.all([
+        // --- INICIO DE LA LÓGICA DE CORRECCIÓN (Falla L-3) ---
+        // Leer catálogo Y las dos hojas de stock físico
+        const [catalogRes, lotsRes, nonPerishableRes] = await Promise.all([
             sheets.spreadsheets.values.get({ spreadsheetId, range: 'CATALOGO_INSUMOS!A:M' }),
-            sheets.spreadsheets.values.get({ spreadsheetId, range: 'MOVIMIENTOS!A:L' })
+            sheets.spreadsheets.values.get({ spreadsheetId, range: 'LOTES!A:F' }),
+            sheets.spreadsheets.values.get({ spreadsheetId, range: 'STOCK_NO_PERECEDERO!A:B' })
         ]);
 
         const catalogRows = (catalogRes.data.values || []).slice(1);
-        const movementRows = (movementsRes.data.values || []).slice(1);
+        const lotRows = (lotsRes.data.values || []).slice(1);
+        const nonPerishableRows = (nonPerishableRes.data.values || []);
 
-        // Calcular el stock actual para cada producto
+        // Calcular el stock físico real desde las hojas de stock
         const stockMap = {};
-        movementRows.forEach(mov => {
-            const itemId = mov[2]; // ID_Insumo
-            const type = mov[3]; // Tipo_Movimiento
-            const quantity = Number(mov[4]); // Cantidad
-            if (!stockMap[itemId]) stockMap[itemId] = 0;
-            stockMap[itemId] += (type === 'Entrada' ? quantity : -quantity);
+
+        // 1. Sumar stock de LOTES (Perecederos)
+        lotRows.forEach(lote => {
+            const itemId = lote[1]; // B: ID_Insumo
+            const availableQty = parseInt(lote[3]) || 0; // D: Cantidad_Disponible
+            if (availableQty > 0) {
+                if (!stockMap[itemId]) stockMap[itemId] = 0;
+                stockMap[itemId] += availableQty;
+            }
         });
 
-        // Mapear el catálogo con su stock calculado
+        // 2. Sumar stock de STOCK_NO_PERECEDERO
+        nonPerishableRows.forEach(item => {
+            const itemId = item[0]; // A: ID_Insumo
+            const availableQty = parseInt(item[1]) || 0; // B: Cantidad_Disponible
+            if (availableQty > 0) {
+                if (!stockMap[itemId]) stockMap[itemId] = 0;
+                stockMap[itemId] += availableQty;
+            }
+        });
+        // --- FIN DE LA LÓGICA DE CORRECCIÓN ---
+
+        // Mapear el catálogo con su stock unificado
         const fullInventory = catalogRows.map(item => ({
             sku: item[2] || 'N/A',
             name: item[3] || 'Sin Nombre',
@@ -65,4 +77,4 @@ exports.handler = async (event) => {
         console.error("Error al leer el inventario completo:", error);
         return { statusCode: 500, body: JSON.stringify({ error: 'Error al leer el inventario.' }) };
     }
-};
+});

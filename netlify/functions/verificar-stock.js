@@ -23,7 +23,12 @@ const transporter = nodemailer.createTransport({
 
 exports.handler = async (event) => {
     
-    // Esta función debe ser protegida para que solo un cron job o admin pueda llamarla.
+    // CORRECCIÓN M-2: Añadir validación de método para consistencia
+    if (event.httpMethod !== 'POST') {
+        return { statusCode: 405, body: 'Method Not Allowed' };
+    }
+
+    // Esta función es un cron job, por lo que usa la API Key del servidor (no 'withAuth')
     const apiKey = event.headers['x-api-key'];
     if (apiKey !== process.env.APP_API_KEY) {
         return { statusCode: 403, body: JSON.stringify({ error: 'Acceso denegado.' }) };
@@ -32,28 +37,49 @@ exports.handler = async (event) => {
     try {
         const auth = getAuth();
         const sheets = google.sheets({ version: 'v4', auth });
+        const spreadsheetId = process.env.GOOGLE_SHEET_ID;
 
-        const [catalogRes, movementsRes] = await Promise.all([
-            sheets.spreadsheets.values.get({ spreadsheetId: process.env.GOOGLE_SHEET_ID, range: 'CATALOGO_INSUMOS!A:M' }),
-            sheets.spreadsheets.values.get({ spreadsheetId: process.env.GOOGLE_SHEET_ID, range: 'MOVIMIENTOS!A:L' })
+        // --- INICIO DE LA LÓGICA DE CORRECCIÓN (Falla L-3) ---
+        // Leer catálogo Y las dos hojas de stock físico
+        const [catalogRes, lotsRes, nonPerishableRes] = await Promise.all([
+            sheets.spreadsheets.values.get({ spreadsheetId, range: 'CATALOGO_INSUMOS!A:M' }),
+            sheets.spreadsheets.values.get({ spreadsheetId, range: 'LOTES!A:F' }),
+            sheets.spreadsheets.values.get({ spreadsheetId, range: 'STOCK_NO_PERECEDERO!A:B' })
         ]);
 
         const catalogRows = (catalogRes.data.values || []).slice(1);
-        const movementRows = (movementsRes.data.values || []).slice(1);
-
         if (catalogRows.length === 0) {
             return { statusCode: 200, body: JSON.stringify({ message: 'No hay items en el catálogo para verificar.' }) };
         }
+        
+        const lotRows = (lotsRes.data.values || []).slice(1);
+        const nonPerishableRows = (nonPerishableRes.data.values || []);
 
+        // Calcular el stock físico real desde las hojas de stock
         const stockMap = {};
-        movementRows.forEach(mov => {
-            const itemId = mov[2];
-            const type = mov[3];
-            const quantity = Number(mov[4]);
-            if (!stockMap[itemId]) stockMap[itemId] = 0;
-            stockMap[itemId] += (type === 'Entrada' ? quantity : -quantity);
+
+        // 1. Sumar stock de LOTES (Perecederos)
+        lotRows.forEach(lote => {
+            const itemId = lote[1]; // B: ID_Insumo
+            const availableQty = parseInt(lote[3]) || 0; // D: Cantidad_Disponible
+            if (availableQty > 0) {
+                if (!stockMap[itemId]) stockMap[itemId] = 0;
+                stockMap[itemId] += availableQty;
+            }
         });
 
+        // 2. Sumar stock de STOCK_NO_PERECEDERO
+        nonPerishableRows.forEach(item => {
+            const itemId = item[0]; // A: ID_Insumo
+            const availableQty = parseInt(item[1]) || 0; // B: Cantidad_Disponible
+            if (availableQty > 0) {
+                if (!stockMap[itemId]) stockMap[itemId] = 0;
+                stockMap[itemId] += availableQty;
+            }
+        });
+        // --- FIN DE LA LÓGICA DE CORRECCIÓN ---
+
+        // La lógica de verificación de stock mínimo es la misma, pero ahora usa el 'stockMap' correcto
         const lowStockItems = [];
         catalogRows.forEach(item => {
             const id = item[1];
