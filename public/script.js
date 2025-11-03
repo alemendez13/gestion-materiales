@@ -915,16 +915,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 transformHeader: header => header.trim().replace(/\s+/g, '_').toLowerCase().replace(/[^a-z0-9_]/gi, ''),
                 complete: async (results) => {
                     try {
+/* INICIO DE CORRECCIÓN: Aceptar cabeceras en español del CSV */
+                        
                         // Filtramos las cabeceras que el backend espera
                         const dataToSubmit = results.data.map(row => ({
-                            itemId: row.itemid || row.id, // Aceptar 'itemid' o 'id'
-                            quantity: row.quantity,
-                            cost: row.cost,
-                            expirationDate: row.expirationdate || null,
-                            provider: row.provider || null,
-                            invoice: row.invoice || null,
-                            serialNumber: row.serialnumber || null
+                            // Busca 'id_insumo', si no 'itemid', si no 'id'
+                            itemId: row.id_insumo || row.itemid || row.id,
+                            
+                            // Busca 'cantidad', si no 'quantity'
+                            quantity: row.cantidad || row.quantity,
+                            
+                            // Busca 'costo_unitario', si no 'cost'
+                            cost: row.costo_unitario || row.cost,
+                            
+                            // Flexibilidad para campos opcionales
+                            expirationDate: row.fechacaducidad || row.expirationdate || null,
+                            provider: row.proveedor || row.provider || null,
+                            invoice: row.factura || row.invoice || null,
+                            serialNumber: row.n_serie || row.serialnumber || null
                         }));
+
+/* FIN DE CORRECCIÓN */
 
                         const response = await authenticatedFetch('/.netlify/functions/bulk-import-stock', {
                             method: 'POST',
