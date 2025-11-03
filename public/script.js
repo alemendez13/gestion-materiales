@@ -123,12 +123,14 @@ document.addEventListener('DOMContentLoaded', () => {
     /**
      * Verifica el token del Magic Link con el backend.
      */
-    const handleTokenVerification = async (token) => {
+// RUTA: script.js
+
+    const handleTokenVerification = async (token) => { // 'token' es el token del Magic Link
         showLoginView('Verificando enlace...');
         try {
             const response = await fetch('/.netlify/functions/verify-session', {
                 method: 'POST',
-                body: JSON.stringify({ token })
+                body: JSON.stringify({ token }) // Enviar el token del Magic Link
             });
 
             if (!response.ok) {
@@ -136,13 +138,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(errorData.error || 'No se pudo verificar el enlace.');
             }
 
-            const profile = await response.json(); // { email, role }
+            // 'profile' ahora contiene { email, role, token: newSessionToken }
+            const profile = await response.json(); 
             
             // ¡ÉXITO! Se crea la sesión del cliente.
             appState.userProfile = {
                 email: profile.email,
                 role: profile.role,
-                token: token // El token de un solo uso se convierte en nuestro token de sesión
+                // --- CORRECCIÓN ---
+                // Guardar el NUEVO token devuelto por el backend, NO el de la URL
+                token: profile.token 
             };
 
             // Guardar la sesión y limpiar la URL
