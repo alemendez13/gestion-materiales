@@ -12,7 +12,6 @@ const getAuth = () => new google.auth.GoogleAuth({
 });
 
 // Función auxiliar para la lógica de registro (copiada de registrar-entrada.js)
-// Esto asegura que ambas funciones sigan EXACTAMENTE las mismas reglas de negocio.
 const registerItemEntry = async (sheets, spreadsheetId, item, userEmail) => {
     
     const quantity = parseInt(item.quantity);
