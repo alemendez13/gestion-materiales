@@ -6,3 +6,13 @@
 
 [dev]
   port = 9999
+
+  # INICIO DE INCLUSIÓN: Aumentar Timeout para funciones lentas
+
+[functions]
+  # Aumentar el tiempo de espera para importaciones grandes
+  "bulk-import-stock" = {
+    timeout = 60 # 60 segundos
+  }
+
+# FIN DE INCLUSIÓN

@@ -48,6 +48,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const newEntryItemSelect = document.getElementById('entry-item-select');
     const assetSelect = document.getElementById('asset-select');
 
+    /* INICIO DE INCLUSIÓN: DOM del importador */
+    const bulkImportForm = document.getElementById('bulk-import-form');
+/* FIN DE INCLUSIÓN */
+
 
     // --- 1. NUEVA FUNCIÓN DE FETCH AUTENTICADO ---
     /**
@@ -372,6 +376,34 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    /* INICIO DE INCLUSIÓN: Cargador de PapaParse */
+    /**
+     * Carga la librería PapaParse dinámicamente bajo demanda.
+     */
+    const loadPapaParse = async () => {
+        if (appState.papaParse) {
+            return appState.papaParse; // Ya está cargada
+        }
+        try {
+            const papaParseScript = document.createElement('script');
+            papaParseScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js';
+            document.body.appendChild(papaParseScript);
+            
+            await new Promise((resolve, reject) => {
+                papaParseScript.onload = resolve;
+                papaParseScript.onerror = reject;
+            });
+            
+            appState.papaParse = window.Papa; // Asigna la librería cargada
+            return appState.papaParse;
+
+        } catch (error) {
+            console.error("Error al cargar PapaParse:", error);
+            showToast("No se pudo cargar la librería de importación.", true);
+            return null;
+        }
+    };
+/* FIN DE INCLUSIÓN */
 
     // --- 4. HELPERS DE RENDERIZADO, NAVEGACIÓN Y SESIÓN (Sin cambios mayores, solo llamadas a API) ---
 
@@ -845,6 +877,93 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    /* INICIO DE INCLUSIÓN: Listener de Importación Masiva */
+    if (bulkImportForm) {
+        bulkImportForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const button = document.getElementById('bulk-import-button');
+            const buttonText = document.getElementById('bulk-import-button-text');
+            const loader = document.getElementById('bulk-import-loader');
+            const resultsContainer = document.getElementById('bulk-import-results');
+            const fileInput = document.getElementById('csv-file-input');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                showToast('Por favor, selecciona un archivo CSV.', true);
+                return;
+            }
+
+            button.disabled = true;
+            buttonText.classList.add('hidden');
+            loader.classList.remove('hidden');
+            resultsContainer.innerHTML = '<p>Procesando archivo...</p>';
+
+            const Papa = await loadPapaParse();
+            if (!Papa) {
+                button.disabled = false;
+                buttonText.classList.remove('hidden');
+                loader.classList.add('hidden');
+                return; // Error ya mostrado por loadPapaParse
+            }
+
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                // Limpiar los nombres de las columnas (ej. "Item ID" -> "itemId")
+                transformHeader: header => header.trim().replace(/\s+/g, '_').toLowerCase().replace(/[^a-z0-9_]/gi, ''),
+                complete: async (results) => {
+                    try {
+                        // Filtramos las cabeceras que el backend espera
+                        const dataToSubmit = results.data.map(row => ({
+                            itemId: row.itemid || row.id, // Aceptar 'itemid' o 'id'
+                            quantity: row.quantity,
+                            cost: row.cost,
+                            expirationDate: row.expirationdate || null,
+                            provider: row.provider || null,
+                            invoice: row.invoice || null,
+                            serialNumber: row.serialnumber || null
+                        }));
+
+                        const response = await authenticatedFetch('/.netlify/functions/bulk-import-stock', {
+                            method: 'POST',
+                            body: JSON.stringify(dataToSubmit)
+                        });
+                        
+                        showToast(response.message, response.errors && response.errors.length > 0);
+                        
+                        // Mostrar errores detallados si los hubo
+                        if (response.errors && response.errors.length > 0) {
+                            resultsContainer.innerHTML = 
+                                `<p class="text-red-600 font-bold">Importación completada con ${response.errors.length} errores:</p>` +
+                                `<ul class="list-disc list-inside text-red-500 mt-2">${response.errors.map(err => `<li>${err}</li>`).join('')}</ul>`;
+                        } else {
+                            resultsContainer.innerHTML = `<p class="text-green-600 font-bold">${response.message}</p>`;
+                        }
+
+                    } catch (error) {
+                        showToast(error.message, true);
+                        resultsContainer.innerHTML = `<p class="text-red-500">${error.message}</p>`;
+                    } finally {
+                        button.disabled = false;
+                        buttonText.classList.remove('hidden');
+                        loader.classList.add('hidden');
+                        fileInput.value = ''; // Limpiar el input
+                    }
+                },
+                error: (error) => {
+                    console.error("Error al parsear CSV:", error);
+                    showToast('Error al leer el archivo CSV.', true);
+                    resultsContainer.innerHTML = `<p class="text-red-500">Error al leer el archivo: ${error.message}</p>`;
+                    button.disabled = false;
+                    buttonText.classList.remove('hidden');
+                    loader.classList.add('hidden');
+                }
+            });
+        });
+    }
+/* FIN DE INCLUSIÓN */
 
     // Listener de Botón: Exportar Activos
     if (exportAssetsBtn) {

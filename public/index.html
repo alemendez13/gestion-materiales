@@ -149,6 +149,31 @@
                             </div>
                             </form>
                         </div>
+
+                        <div class="bg-white p-6 rounded-lg shadow-sm mt-8">
+    <h3 class="text-xl font-semibold text-gray-800 mb-4">Importar Stock Masivo (CSV)</h3>
+    <p class="text-sm text-gray-500 mb-4">
+        Sube un archivo CSV para registrar múltiples entradas de mercancía. El archivo debe tener las columnas: <strong>itemId, quantity, cost, expirationDate</strong>.
+    </p>
+    <form id="bulk-import-form">
+        <div class="mb-4">
+            <label for="csv-file-input" class="block text-sm font-medium text-gray-700">Archivo CSV*</label>
+            <input type="file" id="csv-file-input" required accept=".csv" class="mt-1 block w-full text-sm text-gray-500
+                file:mr-4 file:py-2 file:px-4
+                file:rounded-md file:border-0
+                file:text-sm file:font-semibold
+                file:bg-blue-50 file:text-blue-700
+                hover:file:bg-blue-100
+            "/>
+        </div>
+        <button id="bulk-import-button" type="submit" class="w-full bg-green-500 text-white p-2 rounded-md hover:bg-green-600 flex justify-center items-center">
+            <span id="bulk-import-button-text">Iniciar Importación</span>
+            <div id="bulk-import-loader" class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-6 w-6 ml-3 hidden"></div>
+        </button>
+    </form>
+    <div id="bulk-import-results" class="mt-4 text-sm"></div>
+</div>
+
                         <div class="bg-white p-6 rounded-lg shadow-sm mt-8">
                             <h3 class="text-xl font-semibold text-gray-800 mb-4">Añadir Nuevo Insumo al Catálogo</h3>
                             <form id="new-catalog-item-form">
