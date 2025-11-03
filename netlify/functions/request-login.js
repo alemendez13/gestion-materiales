@@ -99,10 +99,16 @@ exports.handler = async (event) => {
 
     } catch (error) {
         console.error('Error en request-login:', error);
-        // No filtrar el error al cliente, podría exponer la lógica interna.
+// --- MODIFICACIÓN DE DEPURACIÓN ---
+        // En lugar de un error genérico, enviamos el mensaje de error real
+        // y el stack trace al frontend.
         return { 
             statusCode: 500, 
-            body: JSON.stringify({ error: 'Error interno del servidor.' }) 
+            body: JSON.stringify({ 
+                error: `Error interno: ${error.message}`,
+                stack: error.stack 
+            }) 
         };
+        // --- FIN DE LA MODIFICACIÓN ---
     }
 };
