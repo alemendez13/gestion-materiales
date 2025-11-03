@@ -7,12 +7,10 @@
 [dev]
   port = 9999
 
-  # INICIO DE INCLUSIÓN: Aumentar Timeout para funciones lentas
+# --- INICIO DE CORRECCIÓN ---
+# Sintaxis corregida para el timeout de una función específica.
+# En lugar de [functions] y una sub-tabla, se define [functions."nombre-de-la-funcion"]
 
-[functions]
-  # Aumentar el tiempo de espera para importaciones grandes
-  "bulk-import-stock" = {
-    timeout = 60 # 60 segundos
-  }
-
-# FIN DE INCLUSIÓN
+[functions."bulk-import-stock"]
+  timeout = 60 # 60 segundos
+# --- FIN DE CORRECCIÓN ---
