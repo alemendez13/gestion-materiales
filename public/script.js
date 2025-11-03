@@ -175,15 +175,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ email })
             });
 
-if (!response.ok) {
-                // Si NO fue ok, el 'data' que leímos contiene nuestro error detallado
-                // Ej: { error: "Error interno: Conexión SMTP fallida", stack: "..." }
+            // --- INICIO DE LA CORRECCIÓN DE DEPURACIÓN ---
+            // ESTA LÍNEA ES LA QUE FALTA. 
+            // Debe leer el JSON de la respuesta (sea 200 o 500)
+            const data = await response.json();
+
+            if (!response.ok) {
+                // Ahora 'data' SÍ existe y podemos leer 'data.error'
                 throw new Error(data.error || 'Error desconocido del servidor');
             }
-            // --- FIN DE LA MODIFICACIÓN ---
+            // --- FIN DE LA CORRECCIÓN DE DEPURACIÓN ---
+
+            // Si todo fue OK, data.message existe
             showLoginView(data.message); // "Si tu email está registrado..."
 
         } catch (error) {
+            // 'error.message' ahora contendrá el error real del backend
             showLoginView(error.message, true);
         }
     };
