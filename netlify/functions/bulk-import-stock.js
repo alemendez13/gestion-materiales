@@ -11,8 +11,7 @@ const getAuth = () => new google.auth.GoogleAuth({
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
 });
 
-// Función auxiliar para la lógica de registro (copiada de registrar-entrada.js)
-// Esto asegura que ambas funciones sigan EXACTAMENTE las mismas reglas de negocio.
+// Función auxiliar (sin cambios)
 const registerItemEntry = async (sheets, spreadsheetId, item, userEmail) => {
     
     const quantity = parseInt(item.quantity);
@@ -85,11 +84,12 @@ const registerItemEntry = async (sheets, spreadsheetId, item, userEmail) => {
 // Handler principal
 exports.handler = withAuth(async (event) => {
     
-    if (event.httpMethod !== 'POST') {
-        return { statusCode: 405, body: 'Method Not Allowed' };
-    }
-
+    // --- INICIO DE CORRECCIÓN: El 'try' debe ir aquí ---
     try {
+        if (event.httpMethod !== 'POST') {
+            return { statusCode: 405, body: 'Method Not Allowed' };
+        }
+
         const userRole = event.auth.role;
         const userEmail = event.auth.email;
         if (userRole !== 'admin') {
@@ -133,13 +133,11 @@ exports.handler = withAuth(async (event) => {
             }) 
         };
 
-/* INICIO DE CORRECCIÓN: Implementar log de errores detallado */
-
+    // --- El 'catch' va aquí, antes de cerrar el handler ---
     } catch (error) {
         console.error('Error en importación masiva:', error);
         
-        // En lugar de un error genérico, enviamos el mensaje de error real
-        // y el stack trace al frontend.
+        // Enviar el mensaje de error real al frontend.
         return { 
             statusCode: 500, 
             body: JSON.stringify({ 
@@ -148,5 +146,5 @@ exports.handler = withAuth(async (event) => {
             }) 
         };
     }
-/* FIN DE CORRECCIÓN */
+    // --- FIN DE CORRECCIÓN ---
 });
