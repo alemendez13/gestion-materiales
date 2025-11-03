@@ -925,44 +925,53 @@ document.addEventListener('DOMContentLoaded', () => {
                 skipEmptyLines: true,
                 // Limpiar los nombres de las columnas (ej. "Item ID" -> "itemId")
                 transformHeader: header => header.trim().replace(/\s+/g, '_').toLowerCase().replace(/[^a-z0-9_]/gi, ''),
+                
+                // --- INICIO DEL NUEVO BLOQUE PEGADO ---
                 complete: async (results) => {
+                    let successCount = 0;
+                    let errorCount = 0;
+                    const allErrors = [];
+                    
                     try {
-/* INICIO DE CORRECCIÓN: Aceptar cabeceras en español del CSV */
-                        
-                        // Filtramos las cabeceras que el backend espera
                         const dataToSubmit = results.data.map(row => ({
-                            // Busca 'id_insumo', si no 'itemid', si no 'id'
                             itemId: row.id_insumo || row.itemid || row.id,
-                            
-                            // Busca 'cantidad', si no 'quantity'
                             quantity: row.cantidad || row.quantity,
-                            
-                            // Busca 'costo_unitario', si no 'cost'
                             cost: row.costo_unitario || row.cost,
-                            
-                            // Flexibilidad para campos opcionales
                             expirationDate: row.fechacaducidad || row.expirationdate || null,
                             provider: row.proveedor || row.provider || null,
                             invoice: row.factura || row.invoice || null,
                             serialNumber: row.n_serie || row.serialnumber || null
                         }));
-
-/* FIN DE CORRECCIÓN */
-
-                        const response = await authenticatedFetch('/.netlify/functions/bulk-import-stock', {
-                            method: 'POST',
-                            body: JSON.stringify(dataToSubmit)
-                        });
                         
-                        showToast(response.message, response.errors && response.errors.length > 0);
+                        const totalRows = dataToSubmit.length;
+                        const CHUNK_SIZE = 100; // Enviar 100 filas a la vez
+
+                        for (let i = 0; i < totalRows; i += CHUNK_SIZE) {
+                            const chunk = dataToSubmit.slice(i, i + CHUNK_SIZE);
+                            
+                            resultsContainer.innerHTML = `<p class="text-blue-600">Procesando lote: ${i + 1} - ${Math.min(i + CHUNK_SIZE, totalRows)} de ${totalRows}...</p>`;
+                            
+                            const response = await authenticatedFetch('/.netlify/functions/bulk-import-stock', {
+                                method: 'POST',
+                                body: JSON.stringify(chunk)
+                            });
+
+                            successCount += response.successCount || 0;
+                            errorCount += response.errorCount || 0;
+                            if (response.errors && response.errors.length > 0) {
+                                allErrors.push(...response.errors);
+                            }
+                        }
+
+                        // Reporte final
+                        showToast(`Importación finalizada. Éxitos: ${successCount}, Errores: ${errorCount}.`, errorCount > 0);
                         
-                        // Mostrar errores detallados si los hubo
-                        if (response.errors && response.errors.length > 0) {
+                        if (allErrors.length > 0) {
                             resultsContainer.innerHTML = 
-                                `<p class="text-red-600 font-bold">Importación completada con ${response.errors.length} errores:</p>` +
-                                `<ul class="list-disc list-inside text-red-500 mt-2">${response.errors.map(err => `<li>${err}</li>`).join('')}</ul>`;
+                                `<p class="text-red-600 font-bold">Importación completada con ${allErrors.length} errores:</p>` +
+                                `<ul class="list-disc list-inside text-red-500 mt-2" style="max-height: 200px; overflow-y: auto;">${allErrors.map(err => `<li>${err}</li>`).join('')}</ul>`;
                         } else {
-                            resultsContainer.innerHTML = `<p class="text-green-600 font-bold">${response.message}</p>`;
+                            resultsContainer.innerHTML = `<p class="text-green-600 font-bold">¡Éxito! Se importaron ${successCount} registros.</p>`;
                         }
 
                     } catch (error) {
@@ -975,9 +984,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         fileInput.value = ''; // Limpiar el input
                     }
                 },
-                error: (error) => {
+                // --- FIN DEL NUEVO BLOQUE PEGADO ---
+
+                error: (error) => { // <-- Este bloque 'error' no se tocó
                     console.error("Error al parsear CSV:", error);
-                    showToast('Error al leer el archivo CSV.', true);
                     resultsContainer.innerHTML = `<p class="text-red-500">Error al leer el archivo: ${error.message}</p>`;
                     button.disabled = false;
                     buttonText.classList.remove('hidden');
