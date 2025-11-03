@@ -1,9 +1,10 @@
 // RUTA: netlify/functions/verify-session.js
 
 const { google } = require('googleapis');
-const { getUserRole } = require('./auth'); // Reutilizamos el módulo de autenticación
+const { getUserRole } = require('./auth');
+// NUEVO: Importar uuid para crear el nuevo token de sesión
+const { v4: uuidv4 } = require('uuid'); 
 
-// Configuración del cliente de Google (con permisos de ESCRITURA para borrar el token)
 const getAuth = () => {
     return new google.auth.GoogleAuth({
         credentials: {
@@ -21,7 +22,7 @@ exports.handler = async (event) => {
     }
 
     try {
-        const { token } = JSON.parse(event.body);
+        const { token } = JSON.parse(event.body); // Token de Magic Link
 
         if (!token) {
             return { statusCode: 400, body: JSON.stringify({ error: 'Token requerido.' }) };
@@ -32,7 +33,6 @@ exports.handler = async (event) => {
         const spreadsheetId = process.env.GOOGLE_SHEET_ID;
         const range = 'LOGIN_TOKENS!A:C';
 
-        // 1. Leer todos los tokens
         const response = await sheets.spreadsheets.values.get({
             spreadsheetId,
             range,
@@ -41,67 +41,77 @@ exports.handler = async (event) => {
         const rows = response.data.values || [];
         const now = new Date();
 
-        // 2. Buscar el token y su índice
         let foundTokenIndex = -1;
         let validTokenData = null;
 
         for (let i = 0; i < rows.length; i++) {
-            const rowToken = rows[i][0]; // Columna A: Token
-            const rowEmail = rows[i][1]; // Columna B: Email
-            const rowExpires = new Date(rows[i][2]); // Columna C: Expires
+            const rowToken = rows[i][0]; 
+            const rowEmail = rows[i][1]; 
+            const rowExpires = new Date(rows[i][2]);
 
             if (rowToken === token) {
                 foundTokenIndex = i;
                 if (now < rowExpires) {
-                    // El token se encontró y NO ha expirado
-                    validTokenData = { email: rowEmail, rowIndex: i + 1 }; // +1 porque los índices de Sheets empiezan en 1
+                    validTokenData = { email: rowEmail, rowIndex: i + 1 };
                 }
                 break;
             }
         }
 
-        // 3. Si el token es válido, proceder
         if (validTokenData) {
             
-            // 4. (Seguridad) Borrar el token para que sea de un solo uso
-            // Esto es asíncrono, no necesitamos esperar a que termine (fire-and-forget)
-            // Usamos el API v4 'batchUpdate' para borrar la fila específica.
+            // 1. Borrar el token de Magic Link (OTU)
             sheets.spreadsheets.batchUpdate({
                 spreadsheetId,
                 resource: {
-                    requests: [
-                        {
-                            deleteDimension: {
-                                range: {
-                                    sheetId: (await getSheetId(sheets, spreadsheetId, 'LOGIN_TOKENS')), // Necesitamos el ID numérico de la hoja
-                                    dimension: 'ROWS',
-                                    startIndex: validTokenData.rowIndex - 1, // El índice de la API es 0-based
-                                    endIndex: validTokenData.rowIndex
-                                }
+                    requests: [{
+                        deleteDimension: {
+                            range: {
+                                sheetId: (await getSheetId(sheets, spreadsheetId, 'LOGIN_TOKENS')),
+                                dimension: 'ROWS',
+                                startIndex: validTokenData.rowIndex - 1,
+                                endIndex: validTokenData.rowIndex
                             }
                         }
-                    ]
+                    }]
                 }
-            }).catch(err => console.error("Error al borrar el token:", err)); // Solo loggear el error, no bloquear al usuario
+            }).catch(err => console.error("Error al borrar el token:", err));
 
-            // 5. Obtener el rol del usuario (doble verificación)
+            // 2. Obtener el rol
             const role = await getUserRole(validTokenData.email);
-
             if (!role) {
                  return { statusCode: 403, body: JSON.stringify({ error: 'Usuario válido pero sin rol asignado.' }) };
             }
 
-            // 6. ¡Éxito! Devolver el perfil del usuario al frontend
+            // --- INICIO DE LA MODIFICACIÓN ---
+            // 3. Crear un NUEVO token de sesión
+            const newSessionToken = uuidv4();
+            const sessionExpirationTime = new Date(Date.now() + 8 * 60 * 60 * 1000); // 8 horas
+
+            // 4. Guardar el NUEVO token de sesión
+            await sheets.spreadsheets.values.append({
+                spreadsheetId: process.env.GOOGLE_SHEET_ID,
+                range: 'LOGIN_TOKENS!A1', // Escribir en la misma hoja
+                valueInputOption: 'USER_ENTERED',
+                resource: {
+                    values: [
+                        [newSessionToken, validTokenData.email, sessionExpirationTime.toISOString()]
+                    ],
+                },
+            });
+
+            // 5. Devolver el NUEVO token al frontend
             return {
                 statusCode: 200,
                 body: JSON.stringify({
                     email: validTokenData.email,
-                    role: role
+                    role: role,
+                    token: newSessionToken // Devolver el nuevo token
                 })
             };
+            // --- FIN DE LA MODIFICACIÓN ---
 
         } else {
-            // El token no se encontró o ha expirado
             return { 
                 statusCode: 403, 
                 body: JSON.stringify({ error: 'Token inválido o expirado.' }) 
@@ -117,10 +127,7 @@ exports.handler = async (event) => {
     }
 };
 
-/**
- * Función auxiliar para obtener el ID numérico de una hoja (Sheet) por su nombre.
- * El API 'deleteDimension' requiere este ID.
- */
+// ... (la función getSheetId se queda igual) ...
 async function getSheetId(sheets, spreadsheetId, sheetName) {
     const response = await sheets.spreadsheets.get({
         spreadsheetId,
