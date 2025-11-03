@@ -12,6 +12,7 @@ const getAuth = () => new google.auth.GoogleAuth({
 });
 
 // Función auxiliar para la lógica de registro (copiada de registrar-entrada.js)
+// Esto asegura que ambas funciones sigan EXACTAMENTE las mismas reglas de negocio.
 const registerItemEntry = async (sheets, spreadsheetId, item, userEmail) => {
     
     const quantity = parseInt(item.quantity);
@@ -132,8 +133,20 @@ exports.handler = withAuth(async (event) => {
             }) 
         };
 
+/* INICIO DE CORRECCIÓN: Implementar log de errores detallado */
+
     } catch (error) {
         console.error('Error en importación masiva:', error);
-        return { statusCode: 500, body: JSON.stringify({ error: 'Error interno del servidor.' }) };
+        
+        // En lugar de un error genérico, enviamos el mensaje de error real
+        // y el stack trace al frontend.
+        return { 
+            statusCode: 500, 
+            body: JSON.stringify({ 
+                error: `Error interno: ${error.message}`,
+                stack: error.stack 
+            }) 
+        };
     }
+/* FIN DE CORRECCIÓN */
 });
