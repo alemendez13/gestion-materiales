@@ -58,6 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * Reemplazo de 'fetch' que inyecta automáticamente el token de sesión.
      * Todas las llamadas a la API (excepto login) DEBEN usar esto.
      */
+/* INICIO DE CORRECCIÓN: Hacer 'authenticatedFetch' robusto a errores no-JSON */
     const authenticatedFetch = async (endpoint, options = {}) => {
         if (!appState.userProfile || !appState.userProfile.token) {
             throw new Error('No autenticado.');
@@ -65,12 +66,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const defaultHeaders = {
             'Content-Type': 'application/json',
-            // NUEVO: Envía el token de sesión seguro en lugar de la API key.
             'Authorization': `Bearer ${appState.userProfile.token}`
         };
 
-        // Adjunta el email del usuario al cuerpo si es un POST/PUT
-        // Esto permite al backend saber "quién" está haciendo la solicitud.
         if (options.body) {
             let bodyData = JSON.parse(options.body);
             bodyData.userEmail = appState.userProfile.email;
@@ -84,19 +82,33 @@ document.addEventListener('DOMContentLoaded', () => {
         const response = await fetch(endpoint, options);
 
         if (response.status === 403) {
-            // Si el token expira o es inválido, forzar cierre de sesión.
             showToast('Sesión inválida o expirada. Por favor, inicia sesión de nuevo.', true);
             handleLogout();
             throw new Error('Sesión inválida.');
         }
 
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Ocurrió un error en la API.');
+            let errorMsg = 'Ocurrió un error en la API.';
+            try {
+                // Primero, intentar leer la respuesta como JSON
+                const errorData = await response.json();
+                errorMsg = errorData.error || 'Error desconocido en la API.';
+            } catch (jsonError) {
+                // Si falla (como ahora), leer como texto plano
+                console.warn('La respuesta de error no era JSON. Leyendo como texto.');
+                try {
+                    const errorText = await response.text();
+                    errorMsg = `Error del servidor: ${errorText}`;
+                } catch (textError) {
+                    errorMsg = `Error del servidor con respuesta ilegible (Status: ${response.status})`;
+                }
+            }
+            throw new Error(errorMsg);
         }
 
         return response.json();
     };
+/* FIN DE CORRECCIÓN */
 
     // --- 2. NUEVA LÓGICA DE INICIO Y SESIÓN ---
 
