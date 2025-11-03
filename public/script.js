@@ -175,9 +175,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ email })
             });
 
-            if (!response.ok) throw new Error('Error al solicitar el enlace.');
-
-            const data = await response.json();
+if (!response.ok) {
+                // Si NO fue ok, el 'data' que leímos contiene nuestro error detallado
+                // Ej: { error: "Error interno: Conexión SMTP fallida", stack: "..." }
+                throw new Error(data.error || 'Error desconocido del servidor');
+            }
+            // --- FIN DE LA MODIFICACIÓN ---
             showLoginView(data.message); // "Si tu email está registrado..."
 
         } catch (error) {
