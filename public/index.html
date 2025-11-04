@@ -264,20 +264,32 @@
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div class="bg-white p-6 rounded-lg shadow-sm">
                                 <h3 class="text-xl font-semibold text-gray-800 mb-3">Valor Total del Inventario</h3>
+                                <button class="report-toggle-btn text-gray-500 hover:text-blue-500" data-target="total-inventory-value">
+                                <span class="material-icons toggle-icon">expand_more</span>
+                            </button>
+                        </div>
                                 <p id="total-inventory-value" class="text-4xl font-bold text-blue-600">Calculando...</p>
                             </div>
                             <div class="bg-white p-6 rounded-lg shadow-sm">
-                                <h3 class="text-xl font-semibold text-gray-800 mb-3">Insumos con Stock Bajo</h3>
-                                <div id="low-stock-items-container">
-                                    <p>Calculando...</p>
-                                </div>
-                            </div>
+                        <div class="flex justify-between items-center mb-3">
+                            <h3 class="text-xl font-semibold text-gray-800">Insumos con Stock Bajo</h3>
+                            <button class="report-toggle-btn text-gray-500 hover:text-blue-500" data-target="low-stock-items-container">
+                                <span class="material-icons toggle-icon">expand_more</span>
+                            </button>
+                        </div>
+                        <div id="low-stock-items-container" class="hidden"> <p>Calculando...</p>
+                        </div>
+                    </div>
                             <div class="bg-white p-6 rounded-lg shadow-sm col-span-1 md:col-span-2">
-                                <h3 class="text-xl font-semibold text-gray-800 mb-3">Insumos Próximos a Caducar (30 días)</h3>
-                                <div id="expiring-items-container">
-                                    <p>Calculando...</p>
-                                </div>
-                            </div>
+                        <div class="flex justify-between items-center mb-3">
+                            <h3 class="text-xl font-semibold text-gray-800">Insumos Próximos a Caducar (30 días)</h3>
+                            <button class="report-toggle-btn text-gray-500 hover:text-blue-500" data-target="expiring-items-container">
+                                <span class="material-icons toggle-icon">expand_more</span>
+                            </button>
+                        </div>
+                        <div id="expiring-items-container" class="hidden"> <p>Calculando...</p>
+                        </div>
+                    </div>
                         </div>
                     </section>
 

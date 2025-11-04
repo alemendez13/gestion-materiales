@@ -760,6 +760,35 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // --- INICIO DE MODIFICACIÓN ---
+    // Listener para los botones de desplegar reportes
+    if (mainContent) {
+        mainContent.addEventListener('click', (e) => {
+            const toggleButton = e.target.closest('.report-toggle-btn');
+            
+            if (!toggleButton) return; // No se hizo clic en un botón
+
+            e.preventDefault();
+            
+            const targetId = toggleButton.dataset.target;
+            const targetContent = document.getElementById(targetId);
+            const icon = toggleButton.querySelector('.toggle-icon');
+
+            if (!targetContent || !icon) return;
+
+            // Alternar la visibilidad del contenido
+            targetContent.classList.toggle('hidden');
+
+            // Cambiar el ícono
+            if (targetContent.classList.contains('hidden')) {
+                icon.textContent = 'expand_more';
+            } else {
+                icon.textContent = 'expand_less';
+            }
+        });
+    }
+    // --- FIN DE MODIFICACIÓN ---
+
     // Listeners de Autenticación
     if (loginForm) {
         loginForm.addEventListener('submit', handleLoginRequest);
