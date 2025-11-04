@@ -282,18 +282,24 @@
                     </section>
 
                     <section id="inventory-view" class="view hidden">
-                        <h2 class="text-3xl font-semibold text-gray-700 mb-4">Inventario General</h2>
-                        <div class="bg-white p-6 rounded-lg shadow-sm">
-                            <input type="search" id="inventory-search-input" placeholder="Buscar por nombre, SKU o familia..." class="w-full p-2 border border-gray-300 rounded-md mb-4">
-                            <div id="full-inventory-container">
+                                            <h2 class="text-3xl font-semibold text-gray-700 mb-4">Inventario General</h2>
+                                            <div class="bg-white p-6 rounded-lg shadow-sm">
+                                                <div class="flex justify-between items-center mb-4 gap-4">
+                                                    <input type="search" id="inventory-search-input" placeholder="Buscar por nombre, SKU, familia o ubicación..." class="w-full p-2 border border-gray-300 rounded-md">
+                                                    <button id="export-inventory-csv-btn" class="flex-shrink-0 bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 text-sm flex items-center gap-2">
+                                                        <span class="material-icons" style="font-size: 18px;">download</span>
+                                                        Exportar CSV
+                                                    </button>
+                                                </div>
+                                                <div id="full-inventory-container">
+                                                </div>
+                                            </div>
+                     </section>
+
+                                    </div>
+                                </main>
                             </div>
                         </div>
-                    </section>
-
-                </div>
-            </main>
-        </div>
-    </div>
     
     <div id="toast" class="hidden fixed bottom-5 right-5 p-4 rounded-md text-white">
         <p id="toast-message"></p>

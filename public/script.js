@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
         requests: [],
         catalog: [],
         fullInventory: [],
+        currentInventoryView: [], // <-- INICIO DE MODIFICACIÓN
         userProfile: null, // { email: '...', role: '...', token: '...' }
         pdfLib: null // Para carga diferida
     };
@@ -47,6 +48,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const newItemSelect = document.getElementById('item-select');
     const newEntryItemSelect = document.getElementById('entry-item-select');
     const assetSelect = document.getElementById('asset-select');
+
+// --- INICIO DE MODIFICACIÓN ---
+    const exportInventoryCsvBtn = document.getElementById('export-inventory-csv-btn');
+    // --- FIN DE MODIFICACIÓN ---
 
     /* INICIO DE INCLUSIÓN: DOM del importador */
     const bulkImportForm = document.getElementById('bulk-import-form');
@@ -354,6 +359,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Usa authenticatedFetch
             const inventory = await authenticatedFetch('/.netlify/functions/leer-inventario-completo', { method: 'POST' });
             appState.fullInventory = inventory;
+            appState.currentInventoryView = inventory; // <-- INICIO DE MODIFICACIÓN
             renderInventoryTable(inventory);
         } catch (error) {
             container.innerHTML = `<p class="text-red-500">${error.message}</p>`;
@@ -546,6 +552,25 @@ document.addEventListener('DOMContentLoaded', () => {
         link.download = `Responsiva_${payload.assetId}.pdf`;
         link.click();
     };
+
+    // --- INICIO DE MODIFICACIÓN ---
+    /**
+     * Crea y descarga un archivo CSV a partir de un string.
+     */
+    const downloadCSV = (csvString, filename) => {
+        const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        if (link.download !== undefined) { 
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', filename);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    };
+    // --- FIN DE MODIFICACIÓN ---
 
     const renderInventoryTable = (inventoryData) => {
         const container = document.getElementById('full-inventory-container');
@@ -1004,6 +1029,48 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 /* FIN DE INCLUSIÓN */
 
+    // --- INICIO DE MODIFICACIÓN ---
+    // Listener de Botón: Exportar Inventario (CSV)
+    if (exportInventoryCsvBtn) {
+        exportInventoryCsvBtn.addEventListener('click', async () => {
+            const button = exportInventoryCsvBtn;
+            button.disabled = true;
+            button.innerHTML = 'Exportando...';
+
+            try {
+                const Papa = await loadPapaParse();
+                if (!Papa) {
+                    throw new Error('No se pudo cargar la librería de exportación.');
+                }
+                
+                const dataToExport = appState.currentInventoryView;
+                if (!dataToExport || dataToExport.length === 0) {
+                    showToast('No hay datos para exportar.', true);
+                    return;
+                }
+
+                // Mapear los datos para que los encabezados del CSV sean amigables
+                const mappedData = dataToExport.map(item => ({
+                    'SKU': item.sku,
+                    'Nombre del Producto': item.name,
+                    'Familia': item.family,
+                    'Stock Actual': item.stock,
+                    'Ubicación': item.location
+                }));
+
+                const csv = Papa.unparse(mappedData);
+                downloadCSV(csv, 'inventario_general.csv');
+                
+            } catch (error) {
+                showToast(error.message, true);
+            } finally {
+                button.disabled = false;
+                button.innerHTML = '<span class="material-icons" style="font-size: 18px;">download</span> Exportar CSV';
+            }
+        });
+    }
+    // --- FIN DE MODIFICACIÓN ---
+
     // Listener de Botón: Exportar Activos
     if (exportAssetsBtn) {
         exportAssetsBtn.addEventListener('click', async () => {
@@ -1109,15 +1176,18 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.addEventListener('input', (e) => {
         if (e.target.id === 'inventory-search-input') {
             const searchTerm = e.target.value.toLowerCase();
+            // --- INICIO DE MODIFICACIÓN ---
             const filteredInventory = (appState.fullInventory || []).filter(item =>
-// --- INICIO DE MODIFICACIÓN 3 ---
                 item.name.toLowerCase().includes(searchTerm) ||
                 item.sku.toLowerCase().includes(searchTerm) ||
                 item.family.toLowerCase().includes(searchTerm) ||
                 (item.location && item.location.toLowerCase().includes(searchTerm))
-                // --- FIN DE MODIFICACIÓN 3 ---
             );
-            renderInventoryTable(filteredInventory);
+            // Actualizar el estado
+            appState.currentInventoryView = filteredInventory;
+            // Renderizar con los datos filtrados
+            renderInventoryTable(appState.currentInventoryView);
+            // --- FIN DE MODIFICACIÓN ---
         }
 
         if (e.target.id === 'search-input') {
