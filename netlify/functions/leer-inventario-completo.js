@@ -69,7 +69,7 @@ exports.handler = withAuth(async (event) => {
             name: item[3] || 'Sin Nombre',
             family: item[5] || 'N/A',
             stock: stockMap[item[1]] || 0, // item[1] es ID_Insumo
-            location: item[8] || '' // Columna I: Ubicacion
+            location: item[9] || '' // Columna I: Ubicacion
         }));
 
         return { statusCode: 200, body: JSON.stringify(fullInventory) };
