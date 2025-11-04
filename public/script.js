@@ -554,15 +554,19 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+// --- INICIO DE MODIFICACIÓN 1 ---
         const tableRows = inventoryData.map(item => `
             <tr class="border-b">
                 <td class="p-3">${item.sku}</td>
                 <td class="p-3">${item.name}</td>
                 <td class="p-3">${item.family}</td>
                 <td class="p-3 font-bold text-center">${item.stock}</td>
+                <td class="p-3">${item.location || ''}</td>
             </tr>
         `).join('');
+        // --- FIN DE MODIFICACIÓN 1 ---
 
+// --- INICIO DE MODIFICACIÓN 2 ---
         container.innerHTML = `
             <table class="w-full text-left">
                 <thead>
@@ -571,11 +575,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         <th class="p-3 font-semibold text-gray-600">Nombre del Producto</th>
                         <th class="p-3 font-semibold text-gray-600">Familia</th>
                         <th class="p-3 font-semibold text-gray-600 text-center">Stock Actual</th>
+                        <th class="p-3 font-semibold text-gray-600">Ubicación</th>
                     </tr>
                 </thead>
                 <tbody>${tableRows}</tbody>
             </table>
         `;
+        // --- FIN DE MODIFICACIÓN 2 ---
     };
 
     const populateAssetDropdown = () => {
@@ -1104,9 +1110,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target.id === 'inventory-search-input') {
             const searchTerm = e.target.value.toLowerCase();
             const filteredInventory = (appState.fullInventory || []).filter(item =>
+// --- INICIO DE MODIFICACIÓN 3 ---
                 item.name.toLowerCase().includes(searchTerm) ||
                 item.sku.toLowerCase().includes(searchTerm) ||
-                item.family.toLowerCase().includes(searchTerm)
+                item.family.toLowerCase().includes(searchTerm) ||
+                (item.location && item.location.toLowerCase().includes(searchTerm))
+                // --- FIN DE MODIFICACIÓN 3 ---
             );
             renderInventoryTable(filteredInventory);
         }
