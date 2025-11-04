@@ -797,6 +797,29 @@ document.addEventListener('DOMContentLoaded', () => {
         logoutButton.addEventListener('click', handleLogout);
     }
 
+    // --- INICIO DE MODIFICACIÓN ---
+    // Listener para mostrar descripción al seleccionar insumo en formulario de entrada
+    if (newEntryItemSelect) {
+        newEntryItemSelect.addEventListener('change', () => {
+            const selectedId = newEntryItemSelect.value;
+            // No necesitamos un elemento de DOM global, lo buscamos aquí
+            const descriptionEl = document.getElementById('entry-item-description'); 
+            
+            if (!descriptionEl) return;
+
+            const catalogItem = appState.catalog.find(item => item.id === selectedId);
+            
+            if (catalogItem && catalogItem.description) {
+                descriptionEl.textContent = catalogItem.description;
+            } else if (catalogItem) {
+                descriptionEl.textContent = "(Este producto no tiene descripción registrada)";
+            } else {
+                descriptionEl.textContent = "Seleccione un insumo...";
+            }
+        });
+    }
+    // --- FIN DE MODIFICACIÓN ---
+
     // Listener de Formulario: Nueva Solicitud
     if (newRequestForm) {
         newRequestForm.addEventListener('submit', async (e) => {
@@ -867,6 +890,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 showToast('Entrada registrada con éxito.');
                 newEntryForm.reset();
+                // --- INICIO DE MODIFICACIÓN ---
+                const descriptionEl = document.getElementById('entry-item-description');
+                if (descriptionEl) {
+                    descriptionEl.textContent = "Seleccione un insumo...";
+                }
+                // --- FIN DE MODIFICACIÓN ---
             } catch (error) {
                 showToast(error.message, true);
             } finally {

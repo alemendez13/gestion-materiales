@@ -113,11 +113,16 @@
                         <div id="pending-requests-container" class="bg-white p-6 rounded-lg shadow-sm"></div>
                         <div class="bg-white p-6 rounded-lg shadow-sm mt-8">
                             <h3 class="text-xl font-semibold text-gray-800 mb-4">Registrar Entrada de Mercancía</h3>
-                            <form id="new-entry-form">
+                                <form id="new-entry-form">
                                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div>
                                     <label for="entry-item-select" class="block text-sm font-medium text-gray-700">Insumo*</label>
                                     <select id="entry-item-select" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md"></select>
+                                </div>
+                                
+                                <div class="col-span-full -mt-2 mb-2 bg-gray-50 p-3 rounded-md text-sm text-gray-700 border border-gray-200">
+                                    <strong>Descripción:</strong>
+                                    <span id="entry-item-description" class="text-gray-600">Seleccione un insumo...</span>
                                 </div>
                                 <div>
                                     <label for="entry-quantity" class="block text-sm font-medium text-gray-700">Cantidad*</label>
