@@ -553,6 +553,73 @@ document.addEventListener('DOMContentLoaded', () => {
         link.click();
     };
 
+
+    /**
+ * Configura un dropdown con buscador predictivo.
+ * @param {string} searchInputId - ID del input de texto visible.
+ * @param {string} hiddenInputId - ID del input oculto (value real).
+ * @param {string} resultsListId - ID del UL para resultados.
+ * @param {Array} dataItems - Array de objetos { id, label, details }.
+ * @param {Function} onSelectCallback - (Opcional) Función a ejecutar al seleccionar.
+ */
+const setupSearchableDropdown = (searchInputId, hiddenInputId, resultsListId, dataItems, onSelectCallback) => {
+    const searchInput = document.getElementById(searchInputId);
+    const hiddenInput = document.getElementById(hiddenInputId);
+    const resultsList = document.getElementById(resultsListId);
+
+    if (!searchInput || !hiddenInput || !resultsList) return;
+
+    // Función para renderizar lista
+    const renderList = (filterText = '') => {
+        resultsList.innerHTML = '';
+        const normalizedFilter = filterText.toLowerCase();
+
+        const filtered = dataItems.filter(item => 
+            item.label.toLowerCase().includes(normalizedFilter) || 
+            (item.details && item.details.toLowerCase().includes(normalizedFilter))
+        );
+
+        if (filtered.length === 0) {
+            resultsList.innerHTML = '<li class="p-2 text-gray-500 text-sm">No hay coincidencias</li>';
+        } else {
+            filtered.forEach(item => {
+                const li = document.createElement('li');
+                li.className = 'search-result-item';
+                // Resaltar detalles (ej. SKU) si existen
+                const detailsSpan = item.details ? `<span class="text-xs text-gray-400 ml-2">(${item.details})</span>` : '';
+                li.innerHTML = `${item.label} ${detailsSpan}`;
+                
+                li.addEventListener('click', () => {
+                    searchInput.value = item.label; // Mostrar nombre
+                    hiddenInput.value = item.id;    // Guardar ID
+                    resultsList.classList.add('hidden'); // Ocultar lista
+                    if (onSelectCallback) onSelectCallback(item);
+                });
+                resultsList.appendChild(li);
+            });
+        }
+        resultsList.classList.remove('hidden');
+    };
+
+        // Evento Input: Filtrar al escribir
+        searchInput.addEventListener('input', (e) => {
+            renderList(e.target.value);
+            hiddenInput.value = ''; // Limpiar selección si el usuario edita
+        });
+
+        // Evento Focus: Mostrar lista completa al hacer clic
+        searchInput.addEventListener('focus', () => {
+            if(!hiddenInput.value) renderList(searchInput.value); // Si no hay nada seleccionado, mostrar todo
+        });
+
+        // Evento Click Outside: Cerrar si clic fuera
+        document.addEventListener('click', (e) => {
+            if (!searchInput.contains(e.target) && !resultsList.contains(e.target)) {
+                resultsList.classList.add('hidden');
+            }
+        });
+    };
+
     // --- INICIO DE MODIFICACIÓN ---
     /**
      * Crea y descarga un archivo CSV a partir de un string.
@@ -610,15 +677,22 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const populateAssetDropdown = () => {
-        if (!assetSelect || !appState.catalog) return;
+        if (!appState.catalog) return;
+        // Filtra solo activos fijos
         const assets = appState.catalog.filter(item => String(item.isAsset).toUpperCase() === 'TRUE');
         
-        const defaultOption = '<option value="" disabled selected>Seleccione un activo...</option>';
-        const assetOptions = assets.map(item =>
-            `<option value="${item.id}">${item.name} (SKU: ${item.sku})</option>`
-        ).join('');
-        
-        assetSelect.innerHTML = defaultOption + assetOptions;
+        const assetData = assets.map(item => ({
+            id: item.id,
+            label: item.name,
+            details: `SKU: ${item.sku} | Serie: ${item.serialNumber || 'S/N'}`
+        }));
+
+        setupSearchableDropdown(
+            'asset-search-input', 
+            'asset-select', 
+            'asset-search-results', 
+            assetData
+        );
     };
 
     const showView = (viewId) => {
@@ -640,23 +714,44 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const populateCatalogDropdowns = () => {
-        if (!newItemSelect || !newEntryItemSelect || !appState.catalog) return;
-        const defaultOption = '<option value="" disabled selected>Seleccione un insumo...</option>';
-        
-        // Filtra los que NO son activos fijos para las solicitudes normales
+        if (!appState.catalog) return;
+
+        // 1. Configurar Dropdown para "Nueva Solicitud" (Filtra: No es activo fijo)
         const consumableItems = appState.catalog.filter(item => String(item.isAsset).toUpperCase() !== 'TRUE');
-        
-        const catalogOptions = consumableItems.map(item =>
-            `<option value="${item.id}">${item.name}</option>`
-        ).join('');
+        const consumableData = consumableItems.map(item => ({
+            id: item.id,
+            label: item.name,
+            details: `SKU: ${item.sku}` // Búsqueda por SKU también
+        }));
 
-        // El dropdown de "Registrar Entrada" debe mostrar TODOS los items
-        const allItemsOptions = appState.catalog.map(item =>
-            `<option value="${item.id}">${item.name}</option>`
-        ).join('');
+        setupSearchableDropdown(
+            'item-search-input', 
+            'item-select', 
+            'item-search-results', 
+            consumableData
+        );
 
-        newItemSelect.innerHTML = defaultOption + catalogOptions;
-        newEntryItemSelect.innerHTML = defaultOption + allItemsOptions;
+        // 2. Configurar Dropdown para "Registrar Entrada" (Muestra TODO)
+        const allItemsData = appState.catalog.map(item => ({
+            id: item.id,
+            label: item.name,
+            details: `SKU: ${item.sku}`
+        }));
+
+        setupSearchableDropdown(
+            'entry-search-input', 
+            'entry-item-select', 
+            'entry-search-results', 
+            allItemsData,
+            (selectedItem) => {
+                // Callback para actualizar la descripción visual (requisito existente)
+                const descriptionEl = document.getElementById('entry-item-description');
+                const fullItem = appState.catalog.find(i => i.id === selectedItem.id);
+                if (descriptionEl) {
+                    descriptionEl.textContent = fullItem.description || "(Sin descripción)";
+                }
+            }
+        );
     };
 
     const renderUserRequestsTable = (requestsToRender) => {

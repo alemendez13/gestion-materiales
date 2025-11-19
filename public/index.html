@@ -69,9 +69,11 @@
                         <h2 class="text-3xl font-semibold text-gray-700 mb-4">Crear Nueva Solicitud</h2>
                         <div class="bg-white p-6 rounded-lg shadow-sm max-w-lg mx-auto">
                             <form id="new-request-form">
-                                <div class="mb-4">
-                                    <label for="item-select" class="block text-gray-700">Insumo:</label>
-                                    <select id="item-select" required class="w-full mt-1 p-2 border border-gray-300 rounded-md"></select>
+                                <div class="mb-4 search-container">
+                                    <label for="item-search-input" class="block text-gray-700">Insumo:</label>
+                                    <input type="text" id="item-search-input" class="w-full mt-1 p-2 border border-gray-300 rounded-md" placeholder="Escribe para buscar (ej. Paracetamol)..." autocomplete="off">
+                                    <input type="hidden" id="item-select" required>
+                                    <ul id="item-search-results" class="search-results-list hidden"></ul>
                                 </div>
                                 <div class="mb-4">
                                     <label for="quantity-input" class="block text-gray-700">Cantidad:</label>
@@ -115,9 +117,11 @@
                             <h3 class="text-xl font-semibold text-gray-800 mb-4">Registrar Entrada de Mercancía</h3>
                                 <form id="new-entry-form">
                                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                    <label for="entry-item-select" class="block text-sm font-medium text-gray-700">Insumo*</label>
-                                    <select id="entry-item-select" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md"></select>
+                                <div class="search-container">
+                                    <label for="entry-search-input" class="block text-sm font-medium text-gray-700">Insumo*</label>
+                                    <input type="text" id="entry-search-input" class="mt-1 block w-full p-2 border border-gray-300 rounded-md" placeholder="Buscar insumo..." autocomplete="off">
+                                    <input type="hidden" id="entry-item-select" required>
+                                    <ul id="entry-search-results" class="search-results-list hidden"></ul>
                                 </div>
                                 
                                 <div class="col-span-full -mt-2 mb-2 bg-gray-50 p-3 rounded-md text-sm text-gray-700 border border-gray-200">
@@ -228,11 +232,11 @@
                             <h3 class="text-xl font-semibold text-gray-800 mb-4">Generar Responsiva de Activo Fijo</h3>
                             <form id="new-asset-assignment-form">
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label for="asset-select" class="block text-sm font-medium text-gray-700">Activo Fijo*</label>
-                                        <select id="asset-select" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md">
-                                            <option value="" disabled selected>Seleccione un activo...</option>
-                                        </select>
+                                    <div class="search-container">
+                                        <label for="asset-search-input" class="block text-sm font-medium text-gray-700">Activo Fijo*</label>
+                                        <input type="text" id="asset-search-input" class="mt-1 block w-full p-2 border border-gray-300 rounded-md" placeholder="Buscar activo (Nombre o SKU)..." autocomplete="off">
+                                        <input type="hidden" id="asset-select" required>
+                                        <ul id="asset-search-results" class="search-results-list hidden"></ul>
                                     </div>
                                     <div>
                                         <label for="responsible-name" class="block text-sm font-medium text-gray-700">Nombre del Responsable*</label>
