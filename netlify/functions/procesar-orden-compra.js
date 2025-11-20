@@ -81,12 +81,16 @@ exports.handler = withAuth(async (event) => {
                 let history = {};
                 try { history = JSON.parse(rows[rowIndex][7] || '{}'); } catch (e) {}
 
-                // c. Agregar nuevos items (Solo guardamos el último precio)
-                // Asumimos que 'selectedRequests' tiene nombres de productos
+                // c. Agregar nuevos items
+                // Corrección: Si hay múltiples items, el costo total no sirve como costo unitario.
+                // Se marca como 'Costo Global' si hay más de una solicitud, o se asigna si es única.
+                const isSingleItem = selectedRequests.length === 1;
+                
                 selectedRequests.forEach(req => {
                     history[req.name] = {
-                        cost: orderData.totalCost, // Nota: Esto es un aprox si la orden tiene varios items.
-                        date: new Date().toISOString().split('T')[0]
+                        cost: isSingleItem ? orderData.totalCost : "Ver OC (Global)", 
+                        date: new Date().toISOString().split('T')[0],
+                        ref: `OC-${new Date().getTime()}`
                     };
                 });
 
