@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
         catalog: [],
         fullInventory: [],
         currentInventoryView: [], // <-- INICIO DE MODIFICACIÓN
+        providers: [], // <-- NUEVO
         userProfile: null, // { email: '...', role: '...', token: '...' }
         pdfLib: null // Para carga diferida
     };
@@ -866,7 +867,7 @@ const setupSearchableDropdown = (searchInputId, hiddenInputId, resultsListId, da
             if (viewId === 'inventory-view') renderFullInventory();
             
             // --- AQUÍ ESTABA FALTANDO ESTA LÍNEA ---
-            if (viewId === 'purchases-view') loadPurchasesView(); 
+            if (viewId === 'purchases-view') loadPurchasesView();loadProviders();; 
         });
     });
 
@@ -1399,6 +1400,56 @@ const setupSearchableDropdown = (searchInputId, hiddenInputId, resultsListId, da
         }
     };
 
+    // <--- PEGA AQUÍ LA NUEVA FUNCIÓN loadProviders --->
+
+    const loadProviders = async () => {
+        try {
+            const providers = await authenticatedFetch('/.netlify/functions/leer-proveedores', { method: 'POST' });
+            appState.providers = providers;
+            
+            // Mapeamos para el buscador
+            const providerData = providers.map(p => ({
+                id: p.id,
+                label: p.name,
+                details: p.contact ? `Contacto: ${p.contact}` : '',
+                originalData: p 
+            }));
+
+            setupSearchableDropdown(
+                'provider-search-input',
+                'provider-select',
+                'provider-search-results',
+                providerData,
+                (selected) => {
+                    const fullData = selected.originalData;
+                    document.getElementById('provider-email-display').textContent = fullData.email || 'Sin email registrado';
+                    
+                    // Inteligencia de precios
+                    const selectedItemsNames = [
+                        ...purchaseSelection.stock.map(i => i.name),
+                        ...purchaseSelection.requests.map(i => i.name)
+                    ];
+                    
+                    let hintText = '';
+                    if (fullData.priceHistory) {
+                        selectedItemsNames.forEach(name => {
+                            if (fullData.priceHistory[name]) {
+                                hintText += `Último precio de "${name}": $${fullData.priceHistory[name].cost} (${fullData.priceHistory[name].date}). `;
+                            }
+                        });
+                    }
+                    
+                    document.getElementById('price-history-hint').textContent = hintText || 'No hay historial de precios para estos ítems.';
+                }
+            );
+
+        } catch (error) {
+            console.error("Error cargando proveedores", error);
+        }
+    };
+
+    // <--- FIN DE LA NUEVA FUNCIÓN --->
+
     // 2. Renderizar las listas con Checkboxes
     const renderPurchaseLists = (data) => {
         const stockListEl = document.getElementById('purchase-stock-list');
@@ -1590,9 +1641,13 @@ const setupSearchableDropdown = (searchInputId, hiddenInputId, resultsListId, da
             submitBtn.disabled = true; submitBtn.textContent = 'Procesando...';
 
             const orderData = {
-                provider: document.getElementById('order-provider').value,
+                providerId: document.getElementById('provider-select').value, // ID oculto
+                providerName: document.getElementById('provider-search-input').value, // Nombre visible
+                providerEmail: document.getElementById('provider-email-display').textContent,
+                totalCost: document.getElementById('order-cost').value, // NUEVO CAMPO
                 deliveryDate: document.getElementById('order-date').value,
                 notes: document.getElementById('order-notes').value
+            
             };
 
             try {
