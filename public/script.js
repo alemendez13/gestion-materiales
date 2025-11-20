@@ -699,16 +699,13 @@ document.addEventListener('DOMContentLoaded', () => {
             yPos -= 60; 
         }
 
-        // --- 2. TÍTULO (Centrado y más abajo) ---
-        
-        // Bajamos "dos filas" extra (aprox 30 puntos)
+        // --- 2. TÍTULO (Centrado en la página) ---
         yPos -= 30; 
 
         const titleText = 'Requisición de materiales';
         const titleSize = 18;
-        // Calculamos el ancho del texto para centrarlo
         const titleWidth = fontBold.widthOfTextAtSize(titleText, titleSize);
-        const titleX = (width - titleWidth) / 2;
+        const titleX = (width - titleWidth) / 2; // Cálculo para centrar horizontalmente
 
         page.drawText(titleText, { 
             x: titleX, 
@@ -717,9 +714,9 @@ document.addEventListener('DOMContentLoaded', () => {
             font: fontBold 
         });
         
-        yPos -= 40; // Espacio después del título
+        yPos -= 40; 
         
-        // Datos de cabecera (Alineados a la izquierda como antes)
+        // Datos de cabecera
         page.drawText(`Fecha: ${new Date().toLocaleDateString()}`, { x: 50, y: yPos, size: 11, font });
         page.drawText(`Proveedor: ${orderData.providerName || 'N/A'}`, { x: 300, y: yPos, size: 11, font });
         
@@ -745,7 +742,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const itemsToPrint = [...purchaseSelection.stock, ...purchaseSelection.requests];
 
         if (itemsToPrint.length === 0) {
-            page.drawText('--- No se seleccionaron productos para esta orden ---', { x: 150, y: yPos, size: 10, font, color: rgb(0.6, 0, 0) });
+            const noItemsText = '--- No se seleccionaron productos para esta orden ---';
+            const noItemsWidth = font.widthOfTextAtSize(noItemsText, 10);
+            page.drawText(noItemsText, { 
+                x: (width - noItemsWidth) / 2, // También centramos este aviso
+                y: yPos, 
+                size: 10, font, color: rgb(0.6, 0, 0) 
+            });
             yPos -= 20;
         } else {
             itemsToPrint.forEach(item => {
@@ -767,33 +770,34 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // --- 4. FIRMAS Y PIE DE PÁGINA (Centrado en la línea) ---
+        // --- 4. FIRMAS Y PIE DE PÁGINA (CENTRADO EN LA PÁGINA) ---
         
         if (yPos < 100) { page = pdfDoc.addPage(); yPos = height - 100; } else { yPos -= 60; }
 
-        // Definimos coordenadas de la línea
-        const lineStart = 50;
-        const lineEnd = 250;
-        const lineCenter = lineStart + ((lineEnd - lineStart) / 2); // El centro es 150
+        // Cálculos para centrar el bloque de firma en la página
+        const lineWidth = 200; // Longitud de la línea
+        const centerPageX = width / 2; // Centro exacto de la página
+        const lineStart = centerPageX - (lineWidth / 2); // Dónde empieza la línea
+        const lineEnd = centerPageX + (lineWidth / 2);   // Dónde termina la línea
 
-        // Dibujamos la línea
+        // Dibujamos la línea centrada
         page.drawLine({ start: { x: lineStart, y: yPos }, end: { x: lineEnd, y: yPos }, thickness: 1 });
 
-        // Calculamos centro para "Autorizado por:"
+        // Texto "Autorizado por:"
         const authLabel = 'Autorizado por:';
         const authLabelWidth = fontBold.widthOfTextAtSize(authLabel, 9);
         page.drawText(authLabel, { 
-            x: lineCenter - (authLabelWidth / 2), // Centrado respecto a la línea
+            x: centerPageX - (authLabelWidth / 2), // Centrado sobre el eje
             y: yPos - 15, 
             size: 9, 
             font: fontBold 
         });
 
-        // Calculamos centro para el Email
+        // Texto Email
         const emailText = appState.userProfile.email || 'Admin';
         const emailWidth = font.widthOfTextAtSize(emailText, 9);
         page.drawText(emailText, { 
-            x: lineCenter - (emailWidth / 2), // Centrado respecto a la línea
+            x: centerPageX - (emailWidth / 2), // Centrado sobre el eje
             y: yPos - 28, 
             size: 9, 
             font: font, 
