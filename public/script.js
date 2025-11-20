@@ -795,8 +795,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // Recargar datos para actualizar la tabla
                 const requestsData = await authenticatedFetch('/.netlify/functions/leer-datos', { method: 'POST' });
+                // ... dentro del try del adminTableContainer ...
                 appState.requests = requestsData;
-                renderPendingRequestsTable(); // Redibujar la tabla
+
+                // 1. Actualiza la tabla de Administración (Lo que ya tenías)
+                renderPendingRequestsTable(); 
+
+                // 2. AGREGAR ESTA LÍNEA: Actualiza la tabla del Dashboard (Mis Solicitudes)
+                renderUserRequestsTable(appState.requests);
 
             } catch (error) {
                 console.error(error);
