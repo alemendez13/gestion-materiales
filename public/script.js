@@ -676,45 +676,50 @@ document.addEventListener('DOMContentLoaded', () => {
         const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
         const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-        // Variable para controlar la posición vertical (cursor)
-        let yPos = height - 40; // Margen superior inicial
+        let yPos = height - 40; 
 
-        // --- 1. LOGO (Esquina Superior Izquierda - Pequeño) ---
+        // --- 1. LOGO (Esquina Superior Izquierda) ---
         try {
             const logoUrl = 'logo.png'; 
             const logoImageBytes = await fetch(logoUrl).then((res) => res.arrayBuffer());
             const logoImage = await pdfDoc.embedPng(logoImageBytes); 
-            
-            // Escala reducida (0.15) para que sea pequeño
             const logoDims = logoImage.scale(0.15); 
 
             page.drawImage(logoImage, {
-                x: 50, // Margen izquierdo fijo
+                x: 50,
                 y: yPos - logoDims.height, 
                 width: logoDims.width,
                 height: logoDims.height,
             });
 
-            // Bajamos el cursor DEBAJO del logo + un espacio extra
             yPos -= (logoDims.height + 20); 
 
         } catch (error) {
-            console.warn("No se pudo cargar el logo. Usando espacio estándar.", error);
+            console.warn("No se pudo cargar el logo.", error);
             yPos -= 60; 
         }
 
-        // --- 2. TÍTULO Y DATOS (Debajo del Logo) ---
+        // --- 2. TÍTULO (Centrado y más abajo) ---
         
-        page.drawText('Requisición de materiales', { 
-            x: 50, 
+        // Bajamos "dos filas" extra (aprox 30 puntos)
+        yPos -= 30; 
+
+        const titleText = 'Requisición de materiales';
+        const titleSize = 18;
+        // Calculamos el ancho del texto para centrarlo
+        const titleWidth = fontBold.widthOfTextAtSize(titleText, titleSize);
+        const titleX = (width - titleWidth) / 2;
+
+        page.drawText(titleText, { 
+            x: titleX, 
             y: yPos, 
-            size: 18, // Tamaño ajustado para elegancia
+            size: titleSize, 
             font: fontBold 
         });
         
-        yPos -= 35; // Espacio después del título
+        yPos -= 40; // Espacio después del título
         
-        // Datos de cabecera
+        // Datos de cabecera (Alineados a la izquierda como antes)
         page.drawText(`Fecha: ${new Date().toLocaleDateString()}`, { x: 50, y: yPos, size: 11, font });
         page.drawText(`Proveedor: ${orderData.providerName || 'N/A'}`, { x: 300, y: yPos, size: 11, font });
         
@@ -727,9 +732,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // --- 3. TABLA DE ITEMS ---
-        yPos -= 30; // Separación antes de la tabla
+        yPos -= 30;
 
-        // Encabezados de Tabla
         page.drawText('CANT', { x: 50, y: yPos, size: 9, font: fontBold });
         page.drawText('DESCRIPCIÓN', { x: 100, y: yPos, size: 9, font: fontBold });
         page.drawText('TIPO', { x: 450, y: yPos, size: 9, font: fontBold });
@@ -738,22 +742,14 @@ document.addEventListener('DOMContentLoaded', () => {
         page.drawLine({ start: { x: 50, y: yPos }, end: { x: 550, y: yPos }, thickness: 1, color: rgb(0,0,0) });
         yPos -= 20;
 
-        // Consolidar ítems seleccionados
-        // NOTA: Asegúrate de seleccionar los checkboxes en la UI antes de dar clic en "Autorizar"
         const itemsToPrint = [...purchaseSelection.stock, ...purchaseSelection.requests];
 
         if (itemsToPrint.length === 0) {
-            page.drawText('--- No se seleccionaron productos para esta orden ---', { 
-                x: 150, y: yPos, size: 10, font, color: rgb(0.6, 0, 0) 
-            });
+            page.drawText('--- No se seleccionaron productos para esta orden ---', { x: 150, y: yPos, size: 10, font, color: rgb(0.6, 0, 0) });
             yPos -= 20;
         } else {
             itemsToPrint.forEach(item => {
-                // Si llegamos al final de la hoja, añadir nueva página
-                if (yPos < 80) { 
-                    page = pdfDoc.addPage(); 
-                    yPos = height - 50; 
-                }
+                if (yPos < 80) { page = pdfDoc.addPage(); yPos = height - 50; }
                 
                 const qty = item.suggestedQty || item.quantity || '1';
                 const type = item.suggestedQty ? 'Reposición' : 'Solicitud';
@@ -761,44 +757,54 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 page.drawText(`${qty}`, { x: 50, y: yPos, size: 10, font });
                 
-                // Truncar nombre largo para que no encime
                 const cleanName = itemName.length > 60 ? itemName.substring(0, 60) + '...' : itemName;
                 page.drawText(`${cleanName}`, { x: 100, y: yPos, size: 10, font });
                 
                 page.drawText(`${type}`, { x: 450, y: yPos, size: 9, font });
-                
-                // Línea gris tenue separadora
                 page.drawLine({ start: { x: 50, y: yPos - 5 }, end: { x: 550, y: yPos - 5 }, thickness: 0.5, color: rgb(0.8, 0.8, 0.8) });
                 
                 yPos -= 20;
             });
         }
 
-        // --- 4. FIRMAS Y PIE DE PÁGINA ---
+        // --- 4. FIRMAS Y PIE DE PÁGINA (Centrado en la línea) ---
         
-        // Asegurar espacio para firma al final
-        if (yPos < 100) {
-             page = pdfDoc.addPage(); 
-             yPos = height - 100; 
-        } else {
-            yPos -= 40;
-        }
+        if (yPos < 100) { page = pdfDoc.addPage(); yPos = height - 100; } else { yPos -= 60; }
 
-        page.drawLine({ start: { x: 50, y: yPos }, end: { x: 250, y: yPos }, thickness: 1 });
-        page.drawText('Autorizado por:', { x: 50, y: yPos - 15, size: 9, font: fontBold });
-        page.drawText(appState.userProfile.email || 'Admin', { x: 50, y: yPos - 28, size: 9, font, color: rgb(0.3, 0.3, 0.3) });
+        // Definimos coordenadas de la línea
+        const lineStart = 50;
+        const lineEnd = 250;
+        const lineCenter = lineStart + ((lineEnd - lineStart) / 2); // El centro es 150
+
+        // Dibujamos la línea
+        page.drawLine({ start: { x: lineStart, y: yPos }, end: { x: lineEnd, y: yPos }, thickness: 1 });
+
+        // Calculamos centro para "Autorizado por:"
+        const authLabel = 'Autorizado por:';
+        const authLabelWidth = fontBold.widthOfTextAtSize(authLabel, 9);
+        page.drawText(authLabel, { 
+            x: lineCenter - (authLabelWidth / 2), // Centrado respecto a la línea
+            y: yPos - 15, 
+            size: 9, 
+            font: fontBold 
+        });
+
+        // Calculamos centro para el Email
+        const emailText = appState.userProfile.email || 'Admin';
+        const emailWidth = font.widthOfTextAtSize(emailText, 9);
+        page.drawText(emailText, { 
+            x: lineCenter - (emailWidth / 2), // Centrado respecto a la línea
+            y: yPos - 28, 
+            size: 9, 
+            font: font, 
+            color: rgb(0.3, 0.3, 0.3) 
+        });
 
         // Código del documento (Esquina Inferior Derecha)
         const pages = pdfDoc.getPages();
         pages.forEach(p => {
              const { width: pWidth } = p.getSize();
-             p.drawText('GEM-FR-06', {
-                x: pWidth - 100, 
-                y: 30,          
-                size: 9,
-                font: fontBold,
-                color: rgb(0.5, 0.5, 0.5) 
-            });
+             p.drawText('GEM-FR-06', { x: pWidth - 100, y: 30, size: 9, font: fontBold, color: rgb(0.5, 0.5, 0.5) });
         });
 
         return await pdfDoc.saveAsBase64({ dataUri: false });
