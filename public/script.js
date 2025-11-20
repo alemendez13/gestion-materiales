@@ -291,6 +291,47 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => toast.classList.add('hidden'), 3000);
     };
 
+    // ==========================================
+    // FUNCIONES RECUPERADAS (FALTANTES)
+    // ==========================================
+
+    const showLoginView = (message = '', isError = false) => {
+        loginView.classList.remove('hidden');
+        appContainer.classList.add('hidden');
+
+        loginButton.disabled = false;
+        loginButtonText.classList.remove('hidden');
+        loginLoader.classList.add('hidden');
+
+        if (loginMessage) {
+            loginMessage.textContent = message;
+            loginMessage.className = `text-center text-sm mt-4 ${isError ? 'text-red-500' : 'text-gray-500'}`;
+        }
+    };
+
+    const getUrlToken = () => {
+        const hash = window.location.hash.substring(1); // Quita el '#'
+        const params = new URLSearchParams(hash);
+        return params.get('token');
+    };
+
+    const saveSessionToStorage = (session) => {
+        localStorage.setItem('userSession', JSON.stringify(session));
+    };
+
+    const getSessionFromStorage = () => {
+        const sessionStr = localStorage.getItem('userSession');
+        try {
+            return JSON.parse(sessionStr);
+        } catch (e) {
+            return null;
+        }
+    };
+
+    // ==========================================
+    // FIN FUNCIONES RECUPERADAS
+    // ==========================================
+
     const setupSearchableDropdown = (searchInputId, hiddenInputId, resultsListId, dataItems, onSelectCallback) => {
         const searchInput = document.getElementById(searchInputId);
         const hiddenInput = document.getElementById(hiddenInputId);
