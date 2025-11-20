@@ -676,104 +676,129 @@ document.addEventListener('DOMContentLoaded', () => {
         const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
         const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-        // Variable para controlar la altura vertical dinámicamente
-        let yPos = height - 50; 
+        // Variable para controlar la posición vertical (cursor)
+        let yPos = height - 40; // Margen superior inicial
 
-        // --- 1. CARGAR E INCRUSTAR EL LOGO (IZQUIERDA) ---
+        // --- 1. LOGO (Esquina Superior Izquierda - Pequeño) ---
         try {
             const logoUrl = 'logo.png'; 
             const logoImageBytes = await fetch(logoUrl).then((res) => res.arrayBuffer());
             const logoImage = await pdfDoc.embedPng(logoImageBytes); 
             
-            // Escala del logo (ajusta el 0.3 si sigue muy grande o muy chico)
-            const logoDims = logoImage.scale(0.3); 
+            // Escala reducida (0.15) para que sea pequeño
+            const logoDims = logoImage.scale(0.15); 
 
-            // Dibujar logo en esquina superior IZQUIERDA (x: 50)
             page.drawImage(logoImage, {
-                x: 50, 
-                y: height - logoDims.height - 20, // Pegado al margen superior
+                x: 50, // Margen izquierdo fijo
+                y: yPos - logoDims.height, 
                 width: logoDims.width,
                 height: logoDims.height,
             });
 
-            // --- AJUSTE CRÍTICO ---
-            // Movemos el cursor de texto DEBAJO del logo para que no se encime
-            yPos = height - logoDims.height - 60; 
+            // Bajamos el cursor DEBAJO del logo + un espacio extra
+            yPos -= (logoDims.height + 20); 
 
         } catch (error) {
-            console.warn("No se pudo cargar el logo. Usando posición por defecto.", error);
-            yPos = height - 80; 
+            console.warn("No se pudo cargar el logo. Usando espacio estándar.", error);
+            yPos -= 60; 
         }
 
-        // --- 2. TÍTULO Y DATOS ---
+        // --- 2. TÍTULO Y DATOS (Debajo del Logo) ---
         
         page.drawText('Requisición de materiales', { 
             x: 50, 
             y: yPos, 
-            size: 20, 
+            size: 18, // Tamaño ajustado para elegancia
             font: fontBold 
         });
         
-        yPos -= 30; // Espacio entre título y fecha
+        yPos -= 35; // Espacio después del título
         
-        page.drawText(`Fecha: ${new Date().toLocaleDateString()}`, { x: 50, y: yPos, size: 12, font });
+        // Datos de cabecera
+        page.drawText(`Fecha: ${new Date().toLocaleDateString()}`, { x: 50, y: yPos, size: 11, font });
+        page.drawText(`Proveedor: ${orderData.providerName || 'N/A'}`, { x: 300, y: yPos, size: 11, font });
         
-        // Movemos el proveedor un poco más a la derecha para equilibrar
-        page.drawText(`Proveedor: ${orderData.providerName}`, { x: 300, y: yPos, size: 12, font });
-        
-        yPos -= 20;
-        page.drawText(`Entrega Estimada: ${orderData.deliveryDate}`, { x: 50, y: yPos, size: 12, font });
+        yPos -= 18;
+        page.drawText(`Entrega Estimada: ${orderData.deliveryDate || 'Pendiente'}`, { x: 50, y: yPos, size: 11, font });
         
         if (orderData.notes) { 
-            yPos -= 20; 
-            page.drawText(`Notas: ${orderData.notes}`, { x: 50, y: yPos, size: 10, font, color: rgb(0.4, 0.4, 0.4) }); 
+            yPos -= 18; 
+            page.drawText(`Notas: ${orderData.notes}`, { x: 50, y: yPos, size: 10, font, color: rgb(0.3, 0.3, 0.3) }); 
         }
         
         // --- 3. TABLA DE ITEMS ---
-        yPos -= 40; // Separación antes de la tabla
+        yPos -= 30; // Separación antes de la tabla
 
-        // Encabezados
-        page.drawText('CANT', { x: 50, y: yPos, size: 10, font: fontBold });
-        page.drawText('DESCRIPCIÓN', { x: 100, y: yPos, size: 10, font: fontBold });
-        page.drawText('TIPO', { x: 450, y: yPos, size: 10, font: fontBold });
+        // Encabezados de Tabla
+        page.drawText('CANT', { x: 50, y: yPos, size: 9, font: fontBold });
+        page.drawText('DESCRIPCIÓN', { x: 100, y: yPos, size: 9, font: fontBold });
+        page.drawText('TIPO', { x: 450, y: yPos, size: 9, font: fontBold });
         
         yPos -= 5;
-        page.drawLine({ start: { x: 50, y: yPos }, end: { x: 550, y: yPos }, thickness: 1 });
+        page.drawLine({ start: { x: 50, y: yPos }, end: { x: 550, y: yPos }, thickness: 1, color: rgb(0,0,0) });
         yPos -= 20;
 
-        // Listado de Items
-        [...purchaseSelection.stock, ...purchaseSelection.requests].forEach(item => {
-            // Si llegamos al final de la hoja, añadir nueva página
-            if (yPos < 50) { 
-                page = pdfDoc.addPage(); 
-                yPos = height - 50; 
-            }
-            
-            const qty = item.suggestedQty || item.quantity;
-            const type = item.suggestedQty ? 'Reposición' : 'Solicitud';
-            
-            page.drawText(`${qty}`, { x: 50, y: yPos, size: 10, font });
-            
-            // Truncar nombre largo
-            const cleanName = item.name.length > 55 ? item.name.substring(0, 55) + '...' : item.name;
-            page.drawText(`${cleanName}`, { x: 100, y: yPos, size: 10, font });
-            
-            page.drawText(`${type}`, { x: 450, y: yPos, size: 9, font });
+        // Consolidar ítems seleccionados
+        // NOTA: Asegúrate de seleccionar los checkboxes en la UI antes de dar clic en "Autorizar"
+        const itemsToPrint = [...purchaseSelection.stock, ...purchaseSelection.requests];
+
+        if (itemsToPrint.length === 0) {
+            page.drawText('--- No se seleccionaron productos para esta orden ---', { 
+                x: 150, y: yPos, size: 10, font, color: rgb(0.6, 0, 0) 
+            });
             yPos -= 20;
-        });
+        } else {
+            itemsToPrint.forEach(item => {
+                // Si llegamos al final de la hoja, añadir nueva página
+                if (yPos < 80) { 
+                    page = pdfDoc.addPage(); 
+                    yPos = height - 50; 
+                }
+                
+                const qty = item.suggestedQty || item.quantity || '1';
+                const type = item.suggestedQty ? 'Reposición' : 'Solicitud';
+                const itemName = item.name || 'Sin nombre';
+
+                page.drawText(`${qty}`, { x: 50, y: yPos, size: 10, font });
+                
+                // Truncar nombre largo para que no encime
+                const cleanName = itemName.length > 60 ? itemName.substring(0, 60) + '...' : itemName;
+                page.drawText(`${cleanName}`, { x: 100, y: yPos, size: 10, font });
+                
+                page.drawText(`${type}`, { x: 450, y: yPos, size: 9, font });
+                
+                // Línea gris tenue separadora
+                page.drawLine({ start: { x: 50, y: yPos - 5 }, end: { x: 550, y: yPos - 5 }, thickness: 0.5, color: rgb(0.8, 0.8, 0.8) });
+                
+                yPos -= 20;
+            });
+        }
 
         // --- 4. FIRMAS Y PIE DE PÁGINA ---
-        yPos -= 50;
-        page.drawLine({ start: { x: 50, y: yPos }, end: { x: 200, y: yPos }, thickness: 1 });
-        page.drawText('Autorizado por: ' + appState.userProfile.email, { x: 50, y: yPos - 15, size: 10, font });
+        
+        // Asegurar espacio para firma al final
+        if (yPos < 100) {
+             page = pdfDoc.addPage(); 
+             yPos = height - 100; 
+        } else {
+            yPos -= 40;
+        }
+
+        page.drawLine({ start: { x: 50, y: yPos }, end: { x: 250, y: yPos }, thickness: 1 });
+        page.drawText('Autorizado por:', { x: 50, y: yPos - 15, size: 9, font: fontBold });
+        page.drawText(appState.userProfile.email || 'Admin', { x: 50, y: yPos - 28, size: 9, font, color: rgb(0.3, 0.3, 0.3) });
 
         // Código del documento (Esquina Inferior Derecha)
-        page.drawText('GEM-FR-06', {
-            x: width - 120, 
-            y: 30,          
-            size: 10,
-            font: fontBold,
-            color: rgb(0.5, 0.5, 0.5) 
+        const pages = pdfDoc.getPages();
+        pages.forEach(p => {
+             const { width: pWidth } = p.getSize();
+             p.drawText('GEM-FR-06', {
+                x: pWidth - 100, 
+                y: 30,          
+                size: 9,
+                font: fontBold,
+                color: rgb(0.5, 0.5, 0.5) 
+            });
         });
 
         return await pdfDoc.saveAsBase64({ dataUri: false });
