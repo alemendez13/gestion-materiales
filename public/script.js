@@ -768,6 +768,47 @@ document.addEventListener('DOMContentLoaded', () => {
         try { await authenticatedFetch('/.netlify/functions/guardar-datos', { method:'POST', body:JSON.stringify(payload)}); showToast('Enviado'); newRequestForm.reset(); appState.requests = await authenticatedFetch('/.netlify/functions/leer-datos', {method:'POST'}); renderUserRequestsTable(appState.requests); showView('dashboard-view'); } catch(e){ showToast(e.message, true); }
     });
 
+    // --- CORRECCIÓN BOTONES ADMIN (Aprobar/Rechazar) ---
+    if (adminTableContainer) {
+        adminTableContainer.addEventListener('click', async (e) => {
+            // Verificar si el clic fue en un botón con la clase 'action-btn'
+            const button = e.target.closest('.action-btn');
+            if (!button) return; // Si no es un botón de acción, ignorar
+
+            e.preventDefault();
+
+            const requestId = button.dataset.id;
+            const action = button.dataset.action; // "Aprobada" o "Rechazada"
+
+            // Feedback visual inmediato (Deshabilitar botón para evitar doble clic)
+            const originalText = button.textContent;
+            button.disabled = true;
+            button.textContent = "Procesando...";
+
+            try {
+                await authenticatedFetch('/.netlify/functions/actualizar-solicitud', {
+                    method: 'POST',
+                    body: JSON.stringify({ requestId, action })
+                });
+
+                showToast(`Solicitud ${action.toLowerCase()} correctamente.`);
+                
+                // Recargar datos para actualizar la tabla
+                const requestsData = await authenticatedFetch('/.netlify/functions/leer-datos', { method: 'POST' });
+                appState.requests = requestsData;
+                renderPendingRequestsTable(); // Redibujar la tabla
+
+            } catch (error) {
+                console.error(error);
+                showToast(`Error: ${error.message}`, true);
+                // Restaurar botón si hubo error
+                button.disabled = false;
+                button.textContent = originalText;
+            }
+        });
+    }
+    // --- FIN CORRECCIÓN ---
+
     // --- INICIO MODIFICACIÓN FASE 2 ---
     if (newPurchaseRequestForm) {
         newPurchaseRequestForm.addEventListener('submit', async (e) => {
