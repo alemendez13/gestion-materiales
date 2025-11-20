@@ -5,10 +5,11 @@ document.addEventListener('DOMContentLoaded', () => {
         requests: [],
         catalog: [],
         fullInventory: [],
-        currentInventoryView: [], // <-- INICIO DE MODIFICACIÓN
-        providers: [], // <-- NUEVO
-        userProfile: null, // { email: '...', role: '...', token: '...' }
-        pdfLib: null // Para carga diferida
+        currentInventoryView: [],
+        providers: [],
+        userProfile: null, 
+        pdfLib: null,
+        papaParse: null
     };
 
     // --- ELEMENTOS DEL DOM ---
@@ -36,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const navLinks = document.querySelectorAll('.nav-link');
     const views = document.querySelectorAll('.view');
     
-    // Formularios (sin cambios en los IDs)
+    // Formularios
     const newRequestForm = document.getElementById('new-request-form');
     const newPurchaseRequestForm = document.getElementById('new-purchase-request-form');
     const newEntryForm = document.getElementById('new-entry-form');
@@ -50,21 +51,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const newEntryItemSelect = document.getElementById('entry-item-select');
     const assetSelect = document.getElementById('asset-select');
 
-// --- INICIO DE MODIFICACIÓN ---
     const exportInventoryCsvBtn = document.getElementById('export-inventory-csv-btn');
-    // --- FIN DE MODIFICACIÓN ---
-
-    /* INICIO DE INCLUSIÓN: DOM del importador */
     const bulkImportForm = document.getElementById('bulk-import-form');
-/* FIN DE INCLUSIÓN */
+
+    // Elementos del Módulo de Compras
+    const purchasesNavElement = document.getElementById('purchases-nav-link');
+    const btnGenerateOrder = document.getElementById('btn-generate-order');
+    const purchaseCountSpan = document.getElementById('purchase-count');
+    const btnNewProv = document.getElementById('btn-new-provider');
+    const modalProv = document.getElementById('new-provider-modal');
+    const formProv = document.getElementById('new-provider-form');
 
 
-    // --- 1. NUEVA FUNCIÓN DE FETCH AUTENTICADO ---
-    /**
-     * Reemplazo de 'fetch' que inyecta automáticamente el token de sesión.
-     * Todas las llamadas a la API (excepto login) DEBEN usar esto.
-     */
-/* INICIO DE CORRECCIÓN: Hacer 'authenticatedFetch' robusto a errores no-JSON */
+    // --- 1. FUNCIONES DE RED (FETCH) ---
+
     const authenticatedFetch = async (endpoint, options = {}) => {
         if (!appState.userProfile || !appState.userProfile.token) {
             throw new Error('No autenticado.');
@@ -96,12 +96,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!response.ok) {
             let errorMsg = 'Ocurrió un error en la API.';
             try {
-                // Primero, intentar leer la respuesta como JSON
                 const errorData = await response.json();
                 errorMsg = errorData.error || 'Error desconocido en la API.';
             } catch (jsonError) {
-                // Si falla (como ahora), leer como texto plano
-                console.warn('La respuesta de error no era JSON. Leyendo como texto.');
                 try {
                     const errorText = await response.text();
                     errorMsg = `Error del servidor: ${errorText}`;
@@ -114,45 +111,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
         return response.json();
     };
-/* FIN DE CORRECCIÓN */
 
-    // --- 2. NUEVA LÓGICA DE INICIO Y SESIÓN ---
+    // --- 2. LÓGICA DE SESIÓN ---
 
-    /**
-     * Punto de entrada principal de la aplicación.
-     * Decide si mostrar el Login o la App.
-     */
     const bootstrapApp = async () => {
         const urlToken = getUrlToken();
 
         if (urlToken) {
-            // 2a. Hay un token en la URL (viene de un Magic Link)
             await handleTokenVerification(urlToken);
         } else {
-            // 2b. No hay token en la URL, buscar sesión en localStorage
             const session = getSessionFromStorage();
             if (session) {
-                // Hay una sesión guardada
                 appState.userProfile = session;
                 await initializeApp();
             } else {
-                // No hay sesión, mostrar login
                 showLoginView();
             }
         }
     };
 
-    /**
-     * Verifica el token del Magic Link con el backend.
-     */
-// RUTA: script.js
-
-    const handleTokenVerification = async (token) => { // 'token' es el token del Magic Link
+    const handleTokenVerification = async (token) => {
         showLoginView('Verificando enlace...');
         try {
             const response = await fetch('/.netlify/functions/verify-session', {
                 method: 'POST',
-                body: JSON.stringify({ token }) // Enviar el token del Magic Link
+                body: JSON.stringify({ token })
             });
 
             if (!response.ok) {
@@ -160,32 +143,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(errorData.error || 'No se pudo verificar el enlace.');
             }
 
-            // 'profile' ahora contiene { email, role, token: newSessionToken }
             const profile = await response.json(); 
-            
-            // ¡ÉXITO! Se crea la sesión del cliente.
             appState.userProfile = {
                 email: profile.email,
                 role: profile.role,
-                // --- CORRECCIÓN ---
-                // Guardar el NUEVO token devuelto por el backend, NO el de la URL
                 token: profile.token 
             };
 
-            // Guardar la sesión y limpiar la URL
             saveSessionToStorage(appState.userProfile);
-            window.location.hash = ''; // Limpia el token de la URL
-
-            await initializeApp(); // Cargar la aplicación principal
+            window.location.hash = ''; 
+            await initializeApp();
 
         } catch (error) {
             showLoginView(error.message, true);
         }
     };
 
-    /**
-     * Maneja el envío del formulario de login.
-     */
     const handleLoginRequest = async (e) => {
         e.preventDefault();
         const email = emailInput.value.trim().toLowerCase();
@@ -201,47 +174,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'POST',
                 body: JSON.stringify({ email })
             });
-
-            // --- INICIO DE LA CORRECCIÓN DE DEPURACIÓN ---
-            // ESTA LÍNEA ES LA QUE FALTA. 
-            // Debe leer el JSON de la respuesta (sea 200 o 500)
             const data = await response.json();
 
             if (!response.ok) {
-                // Ahora 'data' SÍ existe y podemos leer 'data.error'
                 throw new Error(data.error || 'Error desconocido del servidor');
             }
-            // --- FIN DE LA CORRECCIÓN DE DEPURACIÓN ---
-
-            // Si todo fue OK, data.message existe
-            showLoginView(data.message); // "Si tu email está registrado..."
+            showLoginView(data.message);
 
         } catch (error) {
-            // 'error.message' ahora contendrá el error real del backend
             showLoginView(error.message, true);
         }
     };
 
     const handleLogout = () => {
-        // Aquí podríamos llamar a una función /logout que invalide el token
-        // en la hoja LOGIN_TOKENS, pero por simplicidad, solo borramos la sesión local.
         localStorage.removeItem('userSession');
         appState.userProfile = null;
-        
-        // Ocultar app, mostrar login
         appContainer.classList.add('hidden');
         loginView.classList.remove('hidden');
         showLoginView('Has cerrado la sesión.');
     };
 
-    // --- 3. LÓGICA DE LA APLICACIÓN (MODIFICADA) ---
+    // --- 3. LÓGICA DE LA APLICACIÓN ---
 
-    /**
-     * Carga los datos iniciales de la app (catálogo y solicitudes).
-     */
     const initializeApp = async () => {
         try {
-            // Mostrar la app y ocultar el login
             loginView.classList.add('hidden');
             appContainer.classList.remove('hidden');
             showAppForUser(appState.userProfile);
@@ -249,7 +205,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (loader) loader.classList.remove('hidden');
             if (content) content.classList.add('hidden');
             
-            // Las llamadas ahora usan 'authenticatedFetch'
             const [requestsData, catalogData] = await Promise.all([
                 authenticatedFetch('/.netlify/functions/leer-datos', { method: 'POST' }),
                 authenticatedFetch('/.netlify/functions/leer-catalogo', { method: 'POST' })
@@ -269,54 +224,91 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             showToast(error.message, true);
             if (loader) loader.classList.add('hidden');
-            // Si la inicialización falla (ej. token expirado), forzar logout.
             handleLogout();
         }
     };
 
-    /**
-     * Configura la UI basada en el rol del usuario.
-     */
-    /**
-     * Configura la UI basada en el rol del usuario.
-     */
     const showAppForUser = (profile) => {
         if (!profile) return;
 
         mainContent.classList.remove('hidden');
         mainNav.classList.remove('hidden');
-        
-        // Mostrar menú de perfil
         userProfileMenu.classList.remove('hidden');
         userEmailDisplay.textContent = profile.email;
         userRoleDisplay.textContent = profile.role;
 
         const role = profile.role.trim().toLowerCase();
-        
-        // Referencia al link de compras
         const purchasesNavLink = document.getElementById('purchases-nav-link');
 
         if (role === 'admin') {
             adminNavLink.classList.remove('hidden');
             reportsNavLink.classList.remove('hidden');
-            // Mostrar Compras solo a Admin
             if (purchasesNavLink) purchasesNavLink.classList.remove('hidden');
         } else if (role === 'supervisor') {
             adminNavLink.classList.remove('hidden');
             reportsNavLink.classList.add('hidden');
-            // Ocultar Compras a Supervisor
             if (purchasesNavLink) purchasesNavLink.classList.add('hidden');
         } else {
             adminNavLink.classList.add('hidden');
             reportsNavLink.classList.add('hidden');
-            // Ocultar Compras a Usuario
             if (purchasesNavLink) purchasesNavLink.classList.add('hidden');
         }
     };
 
-    /**
-     * Carga los datos para la vista de Reportes.
-     */
+    // --- 4. HELPERS DE UI Y CARGA DIFERIDA ---
+
+    const setupSearchableDropdown = (searchInputId, hiddenInputId, resultsListId, dataItems, onSelectCallback) => {
+        const searchInput = document.getElementById(searchInputId);
+        const hiddenInput = document.getElementById(hiddenInputId);
+        const resultsList = document.getElementById(resultsListId);
+
+        if (!searchInput || !hiddenInput || !resultsList) return;
+
+        const renderList = (filterText = '') => {
+            resultsList.innerHTML = '';
+            const normalizedFilter = filterText.toLowerCase();
+            const filtered = dataItems.filter(item => 
+                item.label.toLowerCase().includes(normalizedFilter) || 
+                (item.details && item.details.toLowerCase().includes(normalizedFilter))
+            );
+
+            if (filtered.length === 0) {
+                resultsList.innerHTML = '<li class="p-2 text-gray-500 text-sm">No hay coincidencias</li>';
+            } else {
+                filtered.forEach(item => {
+                    const li = document.createElement('li');
+                    li.className = 'search-result-item';
+                    const detailsSpan = item.details ? `<span class="text-xs text-gray-400 ml-2">(${item.details})</span>` : '';
+                    li.innerHTML = `${item.label} ${detailsSpan}`;
+                    
+                    li.addEventListener('click', () => {
+                        searchInput.value = item.label;
+                        hiddenInput.value = item.id;
+                        resultsList.classList.add('hidden');
+                        if (onSelectCallback) onSelectCallback(item);
+                    });
+                    resultsList.appendChild(li);
+                });
+            }
+            resultsList.classList.remove('hidden');
+        };
+
+        searchInput.addEventListener('input', (e) => {
+            renderList(e.target.value);
+            hiddenInput.value = '';
+        });
+
+        searchInput.addEventListener('focus', () => {
+            if(!hiddenInput.value) renderList(searchInput.value);
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!searchInput.contains(e.target) && !resultsList.contains(e.target)) {
+                resultsList.classList.add('hidden');
+            }
+        });
+    };
+
     const loadReportsView = async () => {
         const totalValueEl = document.getElementById('total-inventory-value');
         const lowStockEl = document.getElementById('low-stock-items-container');
@@ -328,9 +320,7 @@ document.addEventListener('DOMContentLoaded', () => {
         expiringEl.innerHTML = '<p>Calculando...</p>';
         
         try {
-            // Usa authenticatedFetch
             const data = await authenticatedFetch('/.netlify/functions/generar-reporte', { method: 'POST' }); 
-            
             totalValueEl.textContent = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(data.totalInventoryValue || 0);
             
             if (data.lowStockItems && data.lowStockItems.length > 0) {
@@ -360,46 +350,33 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    /**
-     * Carga los datos para la vista de Inventario General.
-     */
     const renderFullInventory = async () => {
         const container = document.getElementById('full-inventory-container');
         if (!container) return;
         container.innerHTML = '<p>Cargando inventario...</p>';
 
         try {
-            // Usa authenticatedFetch
             const inventory = await authenticatedFetch('/.netlify/functions/leer-inventario-completo', { method: 'POST' });
             appState.fullInventory = inventory;
-            appState.currentInventoryView = inventory; // <-- INICIO DE MODIFICACIÓN
+            appState.currentInventoryView = inventory;
             renderInventoryTable(inventory);
         } catch (error) {
             container.innerHTML = `<p class="text-red-500">${error.message}</p>`;
         }
     };
     
-    /**
-     * Carga la librería PDF-Lib dinámicamente bajo demanda.
-     */
     const loadPdfLib = async () => {
-        if (appState.pdfLib) {
-            return appState.pdfLib; // Ya está cargada
-        }
-
+        if (appState.pdfLib) return appState.pdfLib;
         try {
             const pdfLibScript = document.createElement('script');
             pdfLibScript.src = 'https://unpkg.com/pdf-lib/dist/pdf-lib.min.js';
             document.body.appendChild(pdfLibScript);
-            
             await new Promise((resolve, reject) => {
                 pdfLibScript.onload = resolve;
                 pdfLibScript.onerror = reject;
             });
-            
-            appState.pdfLib = window.PDFLib; // Asigna la librería cargada
+            appState.pdfLib = window.PDFLib;
             return appState.pdfLib;
-
         } catch (error) {
             console.error("Error al cargar pdf-lib:", error);
             showToast("No se pudo cargar la librería PDF.", true);
@@ -407,57 +384,37 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    /* INICIO DE INCLUSIÓN: Cargador de PapaParse */
-    /**
-     * Carga la librería PapaParse dinámicamente bajo demanda.
-     */
     const loadPapaParse = async () => {
-        if (appState.papaParse) {
-            return appState.papaParse; // Ya está cargada
-        }
+        if (appState.papaParse) return appState.papaParse;
         try {
             const papaParseScript = document.createElement('script');
             papaParseScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js';
             document.body.appendChild(papaParseScript);
-            
             await new Promise((resolve, reject) => {
                 papaParseScript.onload = resolve;
                 papaParseScript.onerror = reject;
             });
-            
-            appState.papaParse = window.Papa; // Asigna la librería cargada
+            appState.papaParse = window.Papa;
             return appState.papaParse;
-
         } catch (error) {
             console.error("Error al cargar PapaParse:", error);
             showToast("No se pudo cargar la librería de importación.", true);
             return null;
         }
     };
-/* FIN DE INCLUSIÓN */
-
-    // --- 4. HELPERS DE RENDERIZADO, NAVEGACIÓN Y SESIÓN (Sin cambios mayores, solo llamadas a API) ---
-
-    // (Aquí irían las funciones sin modificar: renderInventoryTable, populateAssetDropdown, 
-    // showView, populateCatalogDropdowns, renderUserRequestsTable, 
-    // renderPendingRequestsTable, generatePDF, showToast)
-
-    // ... (pegando las funciones sin cambios para que el archivo esté completo) ...
 
     const showLoginView = (message = '', isError = false) => {
         loginView.classList.remove('hidden');
         appContainer.classList.add('hidden');
-
         loginButton.disabled = false;
         loginButtonText.classList.remove('hidden');
         loginLoader.classList.add('hidden');
-
         loginMessage.textContent = message;
         loginMessage.className = `text-center text-sm mt-4 ${isError ? 'text-red-500' : 'text-gray-500'}`;
     };
     
     const getUrlToken = () => {
-        const hash = window.location.hash.substring(1); // Quita el '#'
+        const hash = window.location.hash.substring(1);
         const params = new URLSearchParams(hash);
         return params.get('token');
     };
@@ -468,11 +425,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const getSessionFromStorage = () => {
         const sessionStr = localStorage.getItem('userSession');
-        try {
-            return JSON.parse(sessionStr);
-        } catch (e) {
-            return null;
-        }
+        try { return JSON.parse(sessionStr); } catch (e) { return null; }
     };
     
     const showToast = (message, isError = false) => {
@@ -486,49 +439,28 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const generatePDF = async (payload, catalogItem) => {
-        const PDFLib = await loadPdfLib(); // Carga la librería
+        const PDFLib = await loadPdfLib();
         if (!PDFLib) return;
-
         const { PDFDocument, rgb, StandardFonts } = PDFLib;
-
-        // Create a new PDF
         const pdfDoc = await PDFDocument.create();
         const page = pdfDoc.addPage();
         const { width, height } = page.getSize();
         const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
         const fontSize = 12;
 
-        // Add Logo
         try {
             const logoUrl = 'logo.png';
             const logoImageBytes = await fetch(logoUrl).then(res => res.arrayBuffer());
             const logoImage = await pdfDoc.embedPng(logoImageBytes);
             const logoDims = logoImage.scale(0.15);
-            page.drawImage(logoImage, {
-                x: 50,
-                y: height - logoDims.height - 50,
-                width: logoDims.width,
-                height: logoDims.height,
-            });
-        } catch (err) {
-            console.warn("No se pudo cargar el logo.png para el PDF.");
-        }
+            page.drawImage(logoImage, { x: 50, y: height - logoDims.height - 50, width: logoDims.width, height: logoDims.height });
+        } catch (err) { console.warn("No se pudo cargar el logo.png para el PDF."); }
 
-
-        // Add Title
         const title = 'Responsiva de Activo Fijo';
         const titleSize = 18;
         const titleWidth = font.widthOfTextAtSize(title, titleSize);
+        page.drawText('Responsiva de Activo Fijo', { x: (width - titleWidth) / 2, y: height - 180, font, size: titleSize, color: rgb(0, 0, 0) });
 
-        page.drawText('Responsiva de Activo Fijo', {
-            x: (width - titleWidth) / 2, 
-            y: height - 180, // Posición Y ajustada
-            font,
-            size: titleSize,
-            color: rgb(0, 0, 0),
-        });
-
-        // Add Asset Details
         const textY = height - 250;
         const details = [
             `Fecha: ${new Date().toLocaleDateString()}`,
@@ -540,24 +472,15 @@ document.addEventListener('DOMContentLoaded', () => {
         ];
 
         details.forEach((line, i) => {
-            page.drawText(line, {
-                x: 50,
-                y: textY - (i * 20),
-                font,
-                size: fontSize,
-                color: rgb(0.2, 0.2, 0.2),
-            });
+            page.drawText(line, { x: 50, y: textY - (i * 20), font, size: fontSize, color: rgb(0.2, 0.2, 0.2) });
         });
 
-        // Add Signature Lines
         const signatureY = 150;
         page.drawText('_________________________', { x: 50, y: signatureY, font, size: fontSize });
         page.drawText('Firma del Colaborador', { x: 70, y: signatureY - 15, font, size: 10 });
-
         page.drawText('_________________________', { x: width - 200, y: signatureY, font, size: fontSize });
         page.drawText('Firma de Quien Entrega', { x: width - 180, y: signatureY - 15, font, size: 10 });
 
-        // Save and Download
         const pdfBytes = await pdfDoc.save();
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
         const link = document.createElement('a');
@@ -566,77 +489,6 @@ document.addEventListener('DOMContentLoaded', () => {
         link.click();
     };
 
-
-    /**
- * Configura un dropdown con buscador predictivo.
- * @param {string} searchInputId - ID del input de texto visible.
- * @param {string} hiddenInputId - ID del input oculto (value real).
- * @param {string} resultsListId - ID del UL para resultados.
- * @param {Array} dataItems - Array de objetos { id, label, details }.
- * @param {Function} onSelectCallback - (Opcional) Función a ejecutar al seleccionar.
- */
-const setupSearchableDropdown = (searchInputId, hiddenInputId, resultsListId, dataItems, onSelectCallback) => {
-    const searchInput = document.getElementById(searchInputId);
-    const hiddenInput = document.getElementById(hiddenInputId);
-    const resultsList = document.getElementById(resultsListId);
-
-    if (!searchInput || !hiddenInput || !resultsList) return;
-
-    // Función para renderizar lista
-    const renderList = (filterText = '') => {
-        resultsList.innerHTML = '';
-        const normalizedFilter = filterText.toLowerCase();
-
-        const filtered = dataItems.filter(item => 
-            item.label.toLowerCase().includes(normalizedFilter) || 
-            (item.details && item.details.toLowerCase().includes(normalizedFilter))
-        );
-
-        if (filtered.length === 0) {
-            resultsList.innerHTML = '<li class="p-2 text-gray-500 text-sm">No hay coincidencias</li>';
-        } else {
-            filtered.forEach(item => {
-                const li = document.createElement('li');
-                li.className = 'search-result-item';
-                // Resaltar detalles (ej. SKU) si existen
-                const detailsSpan = item.details ? `<span class="text-xs text-gray-400 ml-2">(${item.details})</span>` : '';
-                li.innerHTML = `${item.label} ${detailsSpan}`;
-                
-                li.addEventListener('click', () => {
-                    searchInput.value = item.label; // Mostrar nombre
-                    hiddenInput.value = item.id;    // Guardar ID
-                    resultsList.classList.add('hidden'); // Ocultar lista
-                    if (onSelectCallback) onSelectCallback(item);
-                });
-                resultsList.appendChild(li);
-            });
-        }
-        resultsList.classList.remove('hidden');
-    };
-
-        // Evento Input: Filtrar al escribir
-        searchInput.addEventListener('input', (e) => {
-            renderList(e.target.value);
-            hiddenInput.value = ''; // Limpiar selección si el usuario edita
-        });
-
-        // Evento Focus: Mostrar lista completa al hacer clic
-        searchInput.addEventListener('focus', () => {
-            if(!hiddenInput.value) renderList(searchInput.value); // Si no hay nada seleccionado, mostrar todo
-        });
-
-        // Evento Click Outside: Cerrar si clic fuera
-        document.addEventListener('click', (e) => {
-            if (!searchInput.contains(e.target) && !resultsList.contains(e.target)) {
-                resultsList.classList.add('hidden');
-            }
-        });
-    };
-
-    // --- INICIO DE MODIFICACIÓN ---
-    /**
-     * Crea y descarga un archivo CSV a partir de un string.
-     */
     const downloadCSV = (csvString, filename) => {
         const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
@@ -650,7 +502,6 @@ const setupSearchableDropdown = (searchInputId, hiddenInputId, resultsListId, da
             document.body.removeChild(link);
         }
     };
-    // --- FIN DE MODIFICACIÓN ---
 
     const renderInventoryTable = (inventoryData) => {
         const container = document.getElementById('full-inventory-container');
@@ -658,8 +509,6 @@ const setupSearchableDropdown = (searchInputId, hiddenInputId, resultsListId, da
             container.innerHTML = '<p>No hay productos en el catálogo.</p>';
             return;
         }
-
-// --- INICIO DE MODIFICACIÓN 1 ---
         const tableRows = inventoryData.map(item => `
             <tr class="border-b">
                 <td class="p-3">${item.sku}</td>
@@ -669,9 +518,6 @@ const setupSearchableDropdown = (searchInputId, hiddenInputId, resultsListId, da
                 <td class="p-3">${item.location || ''}</td>
             </tr>
         `).join('');
-        // --- FIN DE MODIFICACIÓN 1 ---
-
-// --- INICIO DE MODIFICACIÓN 2 ---
         container.innerHTML = `
             <table class="w-full text-left">
                 <thead>
@@ -686,132 +532,84 @@ const setupSearchableDropdown = (searchInputId, hiddenInputId, resultsListId, da
                 <tbody>${tableRows}</tbody>
             </table>
         `;
-        // --- FIN DE MODIFICACIÓN 2 ---
     };
 
     const populateAssetDropdown = () => {
         if (!appState.catalog) return;
-        // Filtra solo activos fijos
         const assets = appState.catalog.filter(item => String(item.isAsset).toUpperCase() === 'TRUE');
-        
         const assetData = assets.map(item => ({
             id: item.id,
             label: item.name,
             details: `SKU: ${item.sku} | Serie: ${item.serialNumber || 'S/N'}`
         }));
-
-        setupSearchableDropdown(
-            'asset-search-input', 
-            'asset-select', 
-            'asset-search-results', 
-            assetData
-        );
+        setupSearchableDropdown('asset-search-input', 'asset-select', 'asset-search-results', assetData);
     };
 
     const showView = (viewId) => {
-        views.forEach(view => {
-            view.style.display = 'none';
-        });
-
+        views.forEach(view => view.style.display = 'none');
         const activeView = document.getElementById(viewId);
-        if (activeView) {
-            activeView.style.display = 'block';
-        }
+        if (activeView) activeView.style.display = 'block';
         
         navLinks.forEach(link => {
             const parentLi = link.closest('li');
-            if (parentLi) {
-                parentLi.classList.toggle('bg-gray-200', link.dataset.view === viewId);
-            }
+            if (parentLi) parentLi.classList.toggle('bg-gray-200', link.dataset.view === viewId);
         });
     };
 
     const populateCatalogDropdowns = () => {
         if (!appState.catalog) return;
-
-        // 1. Configurar Dropdown para "Nueva Solicitud" (Filtra: No es activo fijo)
         const consumableItems = appState.catalog.filter(item => String(item.isAsset).toUpperCase() !== 'TRUE');
-        const consumableData = consumableItems.map(item => ({
-            id: item.id,
-            label: item.name,
-            details: `SKU: ${item.sku}` // Búsqueda por SKU también
-        }));
+        const consumableData = consumableItems.map(item => ({ id: item.id, label: item.name, details: `SKU: ${item.sku}` }));
+        setupSearchableDropdown('item-search-input', 'item-select', 'item-search-results', consumableData);
 
-        setupSearchableDropdown(
-            'item-search-input', 
-            'item-select', 
-            'item-search-results', 
-            consumableData
-        );
-
-        // 2. Configurar Dropdown para "Registrar Entrada" (Muestra TODO)
-        const allItemsData = appState.catalog.map(item => ({
-            id: item.id,
-            label: item.name,
-            details: `SKU: ${item.sku}`
-        }));
-
-        setupSearchableDropdown(
-            'entry-search-input', 
-            'entry-item-select', 
-            'entry-search-results', 
-            allItemsData,
-            (selectedItem) => {
-                // Callback para actualizar la descripción visual (requisito existente)
-                const descriptionEl = document.getElementById('entry-item-description');
-                const fullItem = appState.catalog.find(i => i.id === selectedItem.id);
-                if (descriptionEl) {
-                    descriptionEl.textContent = fullItem.description || "(Sin descripción)";
-                }
-            }
-        );
+        const allItemsData = appState.catalog.map(item => ({ id: item.id, label: item.name, details: `SKU: ${item.sku}` }));
+        setupSearchableDropdown('entry-search-input', 'entry-item-select', 'entry-search-results', allItemsData, (selectedItem) => {
+            const descriptionEl = document.getElementById('entry-item-description');
+            const fullItem = appState.catalog.find(i => i.id === selectedItem.id);
+            if (descriptionEl) descriptionEl.textContent = fullItem.description || "(Sin descripción)";
+        });
     };
 
     const renderUserRequestsTable = (requestsToRender) => {
-        if (!userTableContainer) {
-            // Si el contenedor no está en la vista (ej. admin-view), buscarlo
-            const container = document.getElementById('requests-table-container');
-            if (!container) return; // Si sigue sin estar, salir
-            container.innerHTML = 'Error al renderizar la tabla.';
+        const containerPending = document.getElementById('requests-pending-container');
+        const containerApproved = document.getElementById('requests-approved-container');
+        const containerRejected = document.getElementById('requests-rejected-container');
+        
+        if (!containerPending) {
+            // Fallback para HTML viejo
+            const oldContainer = document.getElementById('requests-table-container');
+            if(oldContainer) oldContainer.innerHTML = '<p class="text-red-500">Actualiza el HTML del Dashboard.</p>';
             return;
         }
 
-        let contentHTML;
         if (!requestsToRender || requestsToRender.length === 0) {
-            contentHTML = '<p class="text-gray-500">No tienes solicitudes por el momento.</p>';
-        } else {
-            const tableRows = requestsToRender.map(req => {
+            containerPending.innerHTML = '<p class="text-gray-500 p-4">No tienes solicitudes.</p>';
+            containerApproved.innerHTML = '<p class="text-gray-500 p-4">No tienes solicitudes.</p>';
+            containerRejected.innerHTML = '<p class="text-gray-500 p-4">No tienes solicitudes.</p>';
+            return;
+        }
+
+        const pending = requestsToRender.filter(r => r.status === 'Pendiente');
+        const approved = requestsToRender.filter(r => r.status === 'Aprobada');
+        const rejected = requestsToRender.filter(r => r.status === 'Rechazada');
+
+        const countBadge = document.getElementById('count-pending');
+        if (countBadge) countBadge.textContent = pending.length;
+
+        const generateTableHTML = (requests, emptyMessage) => {
+            if (requests.length === 0) return `<p class="text-gray-500 italic p-4">${emptyMessage}</p>`;
+            const rows = requests.map(req => {
                 const catalogItem = appState.catalog.find(cItem => cItem.id === req.item);
                 const itemName = catalogItem ? catalogItem.name : (req.item || 'Desconocido');
-                return `
-                    <tr class="border-b">
-                        <td class="p-3">${req.id || 'N/A'}</td>
-                        <td class="p-3">${req.email || 'N/A'}</td>
-                        <td class="p-3">${itemName}</td>
-                        <td class="p-3 text-center">${req.quantity || 'N/A'}</td>
-                        <td class="p-3"><span class="px-2 py-1 text-xs font-semibold rounded-full ${req.status === 'Aprobada' ? 'bg-green-100 text-green-800' : req.status === 'Rechazada' ? 'bg-red-100 text-red-800' : 'bg-gray-200 text-gray-800'}">${req.status || 'N/A'}</span></td>
-                        <td class="p-3 text-sm text-gray-500">${new Date(req.timestamp).toLocaleDateString()}</td>
-                    </tr>
-                `;
+                let statusColor = req.status === 'Aprobada' ? 'bg-green-100 text-green-800' : (req.status === 'Rechazada' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800');
+                return `<tr class="border-b hover:bg-gray-50"><td class="p-3 font-medium">${itemName}</td><td class="p-3 text-center">${req.quantity}</td><td class="p-3"><span class="px-2 py-1 text-xs rounded-full ${statusColor}">${req.status}</span></td><td class="p-3 text-sm text-gray-500">${new Date(req.timestamp).toLocaleDateString()}</td><td class="p-3 text-xs text-gray-400 hidden md:table-cell">${req.id}</td></tr>`;
             }).join('');
+            return `<div class="overflow-x-auto"><table class="w-full text-left"><thead class="bg-gray-50 text-xs uppercase text-gray-500"><tr><th class="p-3">Producto</th><th class="p-3 text-center">Cant.</th><th class="p-3">Estatus</th><th class="p-3">Fecha</th><th class="p-3 hidden md:table-cell">ID Ref</th></tr></thead><tbody class="divide-y divide-gray-100">${rows}</tbody></table></div>`;
+        };
 
-            contentHTML = `
-                <table class="w-full text-left">
-                    <thead>
-                        <tr class="bg-gray-50 border-b">
-                            <th class="p-3 font-semibold text-gray-600">ID</th>
-                            <th class="p-3 font-semibold text-gray-600">Solicitante</th>
-                            <th class="p-3 font-semibold text-gray-600">Producto</th>
-                            <th class="p-3 font-semibold text-gray-600 text-center">Cantidad</th>
-                            <th class="p-3 font-semibold text-gray-600">Estatus</th>
-                            <th class="p-3 font-semibold text-gray-600">Fecha</th>
-                        </tr>
-                    </thead>
-                    <tbody>${tableRows}</tbody>
-                </table>
-            `;
-        }
-        userTableContainer.innerHTML = contentHTML;
+        containerPending.innerHTML = generateTableHTML(pending, "No hay pendientes.");
+        containerApproved.innerHTML = generateTableHTML(approved, "No hay aprobadas.");
+        containerRejected.innerHTML = generateTableHTML(rejected, "No hay rechazadas.");
     };
 
     const renderPendingRequestsTable = () => {
@@ -849,549 +647,20 @@ const setupSearchableDropdown = (searchInputId, hiddenInputId, resultsListId, da
         `;
     };
 
+    // --- 5. MÓDULO DE COMPRAS Y PROVEEDORES ---
 
-    // --- 5. EVENT LISTENERS (MODIFICADOS PARA USAR authenticatedFetch) ---
-
-    // Listeners de Navegación
-    navLinks.forEach(link => {
-        link.addEventListener('click', (e) => {
-            e.preventDefault();
-            const viewId = e.currentTarget.dataset.view;
-            showView(viewId);
-            // Carga de datos "Just-in-Time"
-            if (viewId === 'admin-view') {
-                renderPendingRequestsTable();
-                populateAssetDropdown();
-            }
-            if (viewId === 'reports-view') loadReportsView();
-            if (viewId === 'inventory-view') renderFullInventory();
-            
-            // --- AQUÍ ESTABA FALTANDO ESTA LÍNEA ---
-            if (viewId === 'purchases-view') loadPurchasesView();loadProviders();; 
-        });
-    });
-
-    // --- INICIO DE MODIFICACIÓN ---
-    // Listener para los botones de desplegar reportes
-    if (mainContent) {
-        mainContent.addEventListener('click', (e) => {
-            const toggleButton = e.target.closest('.report-toggle-btn');
-            
-            if (!toggleButton) return; // No se hizo clic en un botón
-
-            e.preventDefault();
-            
-            const targetId = toggleButton.dataset.target;
-            const targetContent = document.getElementById(targetId);
-            const icon = toggleButton.querySelector('.toggle-icon');
-
-            if (!targetContent || !icon) return;
-
-            // Alternar la visibilidad del contenido
-            targetContent.classList.toggle('hidden');
-
-            // Cambiar el ícono
-            if (targetContent.classList.contains('hidden')) {
-                icon.textContent = 'expand_more';
-            } else {
-                icon.textContent = 'expand_less';
-            }
-        });
-    }
-    // --- FIN DE MODIFICACIÓN ---
-
-    // Listeners de Autenticación
-    if (loginForm) {
-        loginForm.addEventListener('submit', handleLoginRequest);
-    }
-    if (logoutButton) {
-        logoutButton.addEventListener('click', handleLogout);
-    }
-
-    // --- INICIO DE MODIFICACIÓN ---
-    // Listener para mostrar descripción al seleccionar insumo en formulario de entrada
-    if (newEntryItemSelect) {
-        newEntryItemSelect.addEventListener('change', () => {
-            const selectedId = newEntryItemSelect.value;
-            // No necesitamos un elemento de DOM global, lo buscamos aquí
-            const descriptionEl = document.getElementById('entry-item-description'); 
-            
-            if (!descriptionEl) return;
-
-            const catalogItem = appState.catalog.find(item => item.id === selectedId);
-            
-            if (catalogItem && catalogItem.description) {
-                descriptionEl.textContent = catalogItem.description;
-            } else if (catalogItem) {
-                descriptionEl.textContent = "(Este producto no tiene descripción registrada)";
-            } else {
-                descriptionEl.textContent = "Seleccione un insumo...";
-            }
-        });
-    }
-    // --- FIN DE MODIFICACIÓN ---
-
-    // Listener de Formulario: Nueva Solicitud
-    if (newRequestForm) {
-        newRequestForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const submitButton = e.target.querySelector('button');
-            submitButton.disabled = true;
-            
-            const payload = {
-                id: 'SOL-' + new Date().getTime(), 
-                timestamp: new Date().toISOString(), 
-                email: appState.userProfile.email, // Email verificado
-                item: newItemSelect.value, 
-                quantity: parseInt(document.getElementById('quantity-input').value)
-                // 'userEmail' se añade automáticamente por authenticatedFetch
-            };
-
-            try {
-                // Usa authenticatedFetch
-                await authenticatedFetch('/.netlify/functions/guardar-datos', { 
-                    method: 'POST', 
-                    body: JSON.stringify(payload) 
-                });
-                
-                showToast('Solicitud enviada con éxito.');
-                newRequestForm.reset();
-                
-                // Recargar datos y volver al dashboard
-                appState.requests = await authenticatedFetch('/.netlify/functions/leer-datos', { method: 'POST' });
-                renderUserRequestsTable(appState.requests);
-                showView('dashboard-view');
-            } catch (error) {
-                showToast(`Error: ${error.message}`, true);
-            } finally {
-                submitButton.disabled = false;
-            }
-        });
-    }
-    
-    // Listener de Formulario: Registrar Entrada
-    if (newEntryForm) {
-        newEntryForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const button = e.target.querySelector('button');
-            button.disabled = true; button.textContent = 'Registrando...';
-            
-            const itemId = document.getElementById('entry-item-select').value;
-            const quantity = parseInt(document.getElementById('entry-quantity').value);
-            const cost = parseFloat(document.getElementById('entry-cost').value);
-
-            // ... (Validaciones del cliente - sin cambios) ...
-
-            const payload = {
-                itemId: itemId, 
-                quantity: quantity,
-                cost: cost, 
-                provider: document.getElementById('entry-provider').value,
-                invoice: document.getElementById('entry-invoice').value, 
-                expirationDate: document.getElementById('entry-expiration').value,
-                serialNumber: document.getElementById('entry-serial').value
-            };
-
-            try {
-                // Usa authenticatedFetch
-                await authenticatedFetch('/.netlify/functions/registrar-entrada', { 
-                    method: 'POST', 
-                    body: JSON.stringify(payload) 
-                });
-                
-                showToast('Entrada registrada con éxito.');
-                newEntryForm.reset();
-                // --- INICIO DE MODIFICACIÓN ---
-                const descriptionEl = document.getElementById('entry-item-description');
-                if (descriptionEl) {
-                    descriptionEl.textContent = "Seleccione un insumo...";
-                }
-                // --- FIN DE MODIFICACIÓN ---
-            } catch (error) {
-                showToast(error.message, true);
-            } finally {
-                button.disabled = false; button.textContent = 'Registrar Entrada';
-            }
-        });
-    }
-
-    // Listener de Formulario: Crear Insumo en Catálogo
-    if (newCatalogForm) {
-        newCatalogForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const button = e.target.querySelector('button');
-            button.disabled = true; button.textContent = 'Añadiendo...';
-            
-            const payload = {
-                name: document.getElementById('item-name-input').value, 
-                sku: document.getElementById('item-sku-input').value,
-                family: document.getElementById('item-family-input').value, 
-                unit: document.getElementById('item-unit-input').value,
-                description: document.getElementById('item-desc-input').value, 
-                minStock: parseInt(document.getElementById('item-min-stock-input').value) || 0,
-                maxStock: 0, // Añadido para que coincida con el backend
-                location: '', // Añadido para que coincida con el backend
-                serialNumber: document.getElementById('item-serial-input').value,
-                isAsset: document.getElementById('item-is-asset-input').checked
-            };
-
-            try {
-                // Usa authenticatedFetch
-                await authenticatedFetch('/.netlify/functions/crear-insumo', { 
-                    method: 'POST', 
-                    body: JSON.stringify(payload) 
-                });
-
-                showToast('Insumo añadido al catálogo con éxito.');
-                newCatalogForm.reset();
-                
-                // Recargar catálogo
-                appState.catalog = await authenticatedFetch('/.netlify/functions/leer-catalogo', { method: 'POST' });
-                populateCatalogDropdowns();
-
-            } catch (error) {
-                showToast(error.message, true);
-            } finally {
-                button.disabled = false; button.textContent = 'Añadir al Catálogo';
-            }
-        });
-    }
-
-    // Listener de Formulario: Solicitud de Compra
-    if (newPurchaseRequestForm) {
-        newPurchaseRequestForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const button = e.target.querySelector('button');
-            button.disabled = true;
-            button.textContent = 'Enviando...';
-
-            const payload = {
-                itemName: document.getElementById('purchase-item-name').value,
-                quantity: parseInt(document.getElementById('purchase-quantity').value),
-                justification: document.getElementById('purchase-justification').value,
-                especificaciones: document.getElementById('purchase-specifications').value
-            };
-
-            try {
-                // Usa authenticatedFetch
-                await authenticatedFetch('/.netlify/functions/crear-solicitud-compra', {
-                    method: 'POST',
-                    body: JSON.stringify(payload)
-                });
-
-                showToast('Solicitud de compra enviada con éxito.');
-                newPurchaseRequestForm.reset();
-            } catch (error) {
-                showToast(error.message, true);
-            } finally {
-                button.disabled = false;
-                button.textContent = 'Enviar Solicitud de Compra';
-            }
-        });
-    }
-
-    /* INICIO DE INCLUSIÓN: Listener de Importación Masiva */
-    if (bulkImportForm) {
-        bulkImportForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const button = document.getElementById('bulk-import-button');
-            const buttonText = document.getElementById('bulk-import-button-text');
-            const loader = document.getElementById('bulk-import-loader');
-            const resultsContainer = document.getElementById('bulk-import-results');
-            const fileInput = document.getElementById('csv-file-input');
-            const file = fileInput.files[0];
-
-            if (!file) {
-                showToast('Por favor, selecciona un archivo CSV.', true);
-                return;
-            }
-
-            button.disabled = true;
-            buttonText.classList.add('hidden');
-            loader.classList.remove('hidden');
-            resultsContainer.innerHTML = '<p>Procesando archivo...</p>';
-
-            const Papa = await loadPapaParse();
-            if (!Papa) {
-                button.disabled = false;
-                buttonText.classList.remove('hidden');
-                loader.classList.add('hidden');
-                return; // Error ya mostrado por loadPapaParse
-            }
-
-            Papa.parse(file, {
-                header: true,
-                skipEmptyLines: true,
-                // Limpiar los nombres de las columnas (ej. "Item ID" -> "itemId")
-                transformHeader: header => header.trim().replace(/\s+/g, '_').toLowerCase().replace(/[^a-z0-9_]/gi, ''),
-                
-                // --- INICIO DEL NUEVO BLOQUE PEGADO ---
-                complete: async (results) => {
-                    let successCount = 0;
-                    let errorCount = 0;
-                    const allErrors = [];
-                    
-                    try {
-                        const dataToSubmit = results.data.map(row => ({
-                            itemId: row.id_insumo || row.itemid || row.id,
-                            quantity: row.cantidad || row.quantity,
-                            cost: row.costo_unitario || row.cost,
-                            expirationDate: row.fechacaducidad || row.expirationdate || null,
-                            provider: row.proveedor || row.provider || null,
-                            invoice: row.factura || row.invoice || null,
-                            serialNumber: row.n_serie || row.serialnumber || null
-                        }));
-                        
-                        const totalRows = dataToSubmit.length;
-                        const CHUNK_SIZE = 100; // Enviar 100 filas a la vez
-
-                        for (let i = 0; i < totalRows; i += CHUNK_SIZE) {
-                            const chunk = dataToSubmit.slice(i, i + CHUNK_SIZE);
-                            
-                            resultsContainer.innerHTML = `<p class="text-blue-600">Procesando lote: ${i + 1} - ${Math.min(i + CHUNK_SIZE, totalRows)} de ${totalRows}...</p>`;
-                            
-                            const response = await authenticatedFetch('/.netlify/functions/bulk-import-stock', {
-                                method: 'POST',
-                                body: JSON.stringify(chunk)
-                            });
-
-                            successCount += response.successCount || 0;
-                            errorCount += response.errorCount || 0;
-                            if (response.errors && response.errors.length > 0) {
-                                allErrors.push(...response.errors);
-                            }
-                        }
-
-                        // Reporte final
-                        showToast(`Importación finalizada. Éxitos: ${successCount}, Errores: ${errorCount}.`, errorCount > 0);
-                        
-                        if (allErrors.length > 0) {
-                            resultsContainer.innerHTML = 
-                                `<p class="text-red-600 font-bold">Importación completada con ${allErrors.length} errores:</p>` +
-                                `<ul class="list-disc list-inside text-red-500 mt-2" style="max-height: 200px; overflow-y: auto;">${allErrors.map(err => `<li>${err}</li>`).join('')}</ul>`;
-                        } else {
-                            resultsContainer.innerHTML = `<p class="text-green-600 font-bold">¡Éxito! Se importaron ${successCount} registros.</p>`;
-                        }
-
-                    } catch (error) {
-                        showToast(error.message, true);
-                        resultsContainer.innerHTML = `<p class="text-red-500">${error.message}</p>`;
-                    } finally {
-                        button.disabled = false;
-                        buttonText.classList.remove('hidden');
-                        loader.classList.add('hidden');
-                        fileInput.value = ''; // Limpiar el input
-                    }
-                },
-                // --- FIN DEL NUEVO BLOQUE PEGADO ---
-
-                error: (error) => { // <-- Este bloque 'error' no se tocó
-                    console.error("Error al parsear CSV:", error);
-                    resultsContainer.innerHTML = `<p class="text-red-500">Error al leer el archivo: ${error.message}</p>`;
-                    button.disabled = false;
-                    buttonText.classList.remove('hidden');
-                    loader.classList.add('hidden');
-                }
-            });
-        });
-    }
-/* FIN DE INCLUSIÓN */
-
-    // --- INICIO DE MODIFICACIÓN ---
-    // Listener de Botón: Exportar Inventario (CSV)
-    if (exportInventoryCsvBtn) {
-        exportInventoryCsvBtn.addEventListener('click', async () => {
-            const button = exportInventoryCsvBtn;
-            button.disabled = true;
-            button.innerHTML = 'Exportando...';
-
-            try {
-                const Papa = await loadPapaParse();
-                if (!Papa) {
-                    throw new Error('No se pudo cargar la librería de exportación.');
-                }
-                
-                const dataToExport = appState.currentInventoryView;
-                if (!dataToExport || dataToExport.length === 0) {
-                    showToast('No hay datos para exportar.', true);
-                    return;
-                }
-
-                // Mapear los datos para que los encabezados del CSV sean amigables
-                const mappedData = dataToExport.map(item => ({
-                    'SKU': item.sku,
-                    'Nombre del Producto': item.name,
-                    'Familia': item.family,
-                    'Stock Actual': item.stock,
-                    'Ubicación': item.location
-                }));
-
-                const csv = Papa.unparse(mappedData);
-                downloadCSV(csv, 'inventario_general.csv');
-                
-            } catch (error) {
-                showToast(error.message, true);
-            } finally {
-                button.disabled = false;
-                button.innerHTML = '<span class="material-icons" style="font-size: 18px;">download</span> Exportar CSV';
-            }
-        });
-    }
-    // --- FIN DE MODIFICACIÓN ---
-
-    // Listener de Botón: Exportar Activos
-    if (exportAssetsBtn) {
-        exportAssetsBtn.addEventListener('click', async () => {
-            const button = exportAssetsBtn;
-            button.disabled = true;
-            button.textContent = 'Exportando...';
-
-            try {
-                // Usa authenticatedFetch (sin body, el email se añade automáticamente)
-                const result = await authenticatedFetch('/.netlify/functions/exportar-activos', {
-                    method: 'POST'
-                });
-                
-                showToast(result.message);
-
-            } catch (error) {
-                showToast(error.message, true);
-            } finally {
-                button.disabled = false;
-                button.textContent = 'Exportar Activos';
-            }
-        });
-    }
-
-    // Listener de Formulario: Generar Responsiva
-    if (newAssetForm) {
-        newAssetForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const button = e.target.querySelector('button');
-            button.disabled = true;
-            button.textContent = 'Generando...';
-
-            const payload = {
-                assetId: document.getElementById('asset-select').value,
-                responsibleName: document.getElementById('responsible-name').value,
-                responsibleEmail: document.getElementById('responsible-email').value,
-                conditions: document.getElementById('asset-conditions').value
-            };
-            
-            // ... (Validaciones del cliente - sin cambios) ...
-
-            try {
-                // Usa authenticatedFetch
-                await authenticatedFetch('/.netlify/functions/generar-responsiva', {
-                    method: 'POST',
-                    body: JSON.stringify(payload)
-                });
-
-                const catalogItem = appState.catalog.find(item => item.id === payload.assetId);
-                await generatePDF(payload, catalogItem); // Genera PDF en el cliente
-
-                showToast('Responsiva generada con éxito.');
-                newAssetForm.reset();
-                
-                // Recargar datos para reflejar la salida del stock
-                appState.requests = await authenticatedFetch('/.netlify/functions/leer-datos', { method: 'POST' });
-                renderUserRequestsTable(appState.requests);
-
-
-            } catch (error) {
-                showToast(error.message, true);
-            } finally {
-                button.disabled = false;
-                button.textContent = 'Generar Responsiva';
-            }
-        });
-    }
-
-    // Listener de Tabla de Admin: Aprobar/Rechazar
-    if (adminTableContainer) {
-        adminTableContainer.addEventListener('click', async (e) => {
-            if (e.target.classList.contains('action-btn')) {
-                const button = e.target;
-                button.disabled = true; button.textContent = '...';
-                const { id, action } = button.dataset;
-                try {
-                    // Usa authenticatedFetch
-                    await authenticatedFetch('/.netlify/functions/actualizar-solicitud', {
-                        method: 'POST', 
-                        body: JSON.stringify({ 
-                            requestId: id, 
-                            action: action 
-                            // approverEmail se añade automáticamente
-                        })
-                    });
-                    
-                    showToast(`Solicitud ${action.toLowerCase()}.`);
-                    
-                    // Recargar datos
-                    appState.requests = await authenticatedFetch('/.netlify/functions/leer-datos', { method: 'POST' });
-                    renderUserRequestsTable(appState.requests); // Actualiza la tabla del dashboard
-                    renderPendingRequestsTable(); // Actualiza la tabla de admin
-
-                } catch (error) {
-                    showToast(error.message, true);
-                    button.disabled = false; button.textContent = action;
-                }
-            }
-        });
-    }
-
-    // Listeners de Búsqueda (sin cambios)
-    document.body.addEventListener('input', (e) => {
-        if (e.target.id === 'inventory-search-input') {
-            const searchTerm = e.target.value.toLowerCase();
-            // --- INICIO DE MODIFICACIÓN ---
-            const filteredInventory = (appState.fullInventory || []).filter(item =>
-                item.name.toLowerCase().includes(searchTerm) ||
-                item.sku.toLowerCase().includes(searchTerm) ||
-                item.family.toLowerCase().includes(searchTerm) ||
-                (item.location && item.location.toLowerCase().includes(searchTerm))
-            );
-            // Actualizar el estado
-            appState.currentInventoryView = filteredInventory;
-            // Renderizar con los datos filtrados
-            renderInventoryTable(appState.currentInventoryView);
-            // --- FIN DE MODIFICACIÓN ---
-        }
-
-        if (e.target.id === 'search-input') {
-            const searchTerm = e.target.value.toLowerCase();
-            const userRequests = appState.requests || [];
-            const filteredRequests = userRequests.filter(req => {
-                const catalogItem = appState.catalog.find(cItem => cItem.id === req.item);
-                const itemName = catalogItem ? catalogItem.name.toLowerCase() : '';
-                return itemName.includes(searchTerm) || (req.status && req.status.toLowerCase().includes(searchTerm));
-            });
-            renderUserRequestsTable(filteredRequests);
-        }
-    });
-
-    // --- MÓDULO DE GESTIÓN DE COMPRAS (FASE 2) ---
-
-    const purchasesNavElement = document.getElementById('purchases-nav-link');
-    const btnGenerateOrder = document.getElementById('btn-generate-order');
-    const purchaseCountSpan = document.getElementById('purchase-count');
-    
-    // Variables de estado local para compras
     let purchaseSelection = { stock: [], requests: [] };
     let purchaseDataCache = null;
 
-    // 1. Función para cargar datos de compras (Stock Bajo + Solicitudes)
     const loadPurchasesView = async () => {
         const stockListEl = document.getElementById('purchase-stock-list');
         const reqListEl = document.getElementById('purchase-requests-list');
-        
         stockListEl.innerHTML = '<div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-6 w-6 mx-auto"></div>';
         reqListEl.innerHTML = '<div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-6 w-6 mx-auto"></div>';
 
         try {
             const data = await authenticatedFetch('/.netlify/functions/obtener-datos-compras', { method: 'POST' });
-            purchaseDataCache = data; // Guardar en caché local
+            purchaseDataCache = data;
             renderPurchaseLists(data);
         } catch (error) {
             showToast(error.message, true);
@@ -1400,14 +669,11 @@ const setupSearchableDropdown = (searchInputId, hiddenInputId, resultsListId, da
         }
     };
 
-    // <--- PEGA AQUÍ LA NUEVA FUNCIÓN loadProviders --->
-
     const loadProviders = async () => {
         try {
             const providers = await authenticatedFetch('/.netlify/functions/leer-proveedores', { method: 'POST' });
             appState.providers = providers;
             
-            // Mapeamos para el buscador
             const providerData = providers.map(p => ({
                 id: p.id,
                 label: p.name,
@@ -1415,58 +681,40 @@ const setupSearchableDropdown = (searchInputId, hiddenInputId, resultsListId, da
                 originalData: p 
             }));
 
-            setupSearchableDropdown(
-                'provider-search-input',
-                'provider-select',
-                'provider-search-results',
-                providerData,
-                (selected) => {
-                    const fullData = selected.originalData;
-                    document.getElementById('provider-email-display').textContent = fullData.email || 'Sin email registrado';
-                    
-                    // Inteligencia de precios
-                    const selectedItemsNames = [
-                        ...purchaseSelection.stock.map(i => i.name),
-                        ...purchaseSelection.requests.map(i => i.name)
-                    ];
-                    
-                    let hintText = '';
-                    if (fullData.priceHistory) {
-                        selectedItemsNames.forEach(name => {
-                            if (fullData.priceHistory[name]) {
-                                hintText += `Último precio de "${name}": $${fullData.priceHistory[name].cost} (${fullData.priceHistory[name].date}). `;
-                            }
-                        });
-                    }
-                    
-                    document.getElementById('price-history-hint').textContent = hintText || 'No hay historial de precios para estos ítems.';
+            setupSearchableDropdown('provider-search-input', 'provider-select', 'provider-search-results', providerData, (selected) => {
+                const fullData = selected.originalData;
+                document.getElementById('provider-email-display').textContent = fullData.email || 'Sin email registrado';
+                
+                const selectedItemsNames = [...purchaseSelection.stock.map(i => i.name), ...purchaseSelection.requests.map(i => i.name)];
+                let hintText = '';
+                if (fullData.priceHistory) {
+                    selectedItemsNames.forEach(name => {
+                        if (fullData.priceHistory[name]) {
+                            hintText += `Último precio de "${name}": $${fullData.priceHistory[name].cost} (${fullData.priceHistory[name].date}). `;
+                        }
+                    });
                 }
-            );
+                document.getElementById('price-history-hint').textContent = hintText || 'No hay historial de precios para estos ítems.';
+            });
 
         } catch (error) {
             console.error("Error cargando proveedores", error);
         }
     };
 
-    // <--- FIN DE LA NUEVA FUNCIÓN --->
-
-    // 2. Renderizar las listas con Checkboxes
     const renderPurchaseLists = (data) => {
         const stockListEl = document.getElementById('purchase-stock-list');
         const reqListEl = document.getElementById('purchase-requests-list');
         
-        // Limpiar estado de selección
         purchaseSelection = { stock: [], requests: [] };
         updatePurchaseUI();
 
-        // A. Renderizar Stock Bajo
         if (data.lowStockItems.length === 0) {
             stockListEl.innerHTML = '<p class="text-gray-500 text-sm p-2">Todo el stock está saludable.</p>';
         } else {
             stockListEl.innerHTML = data.lowStockItems.map((item, index) => `
                 <div class="flex items-start p-3 border-b bg-white hover:bg-red-50 transition">
-                    <input type="checkbox" class="mt-1 mr-3 h-4 w-4 text-red-600 border-gray-300 rounded focus:ring-red-500 purchase-checkbox" 
-                        data-type="stock" data-index="${index}">
+                    <input type="checkbox" class="mt-1 mr-3 h-4 w-4 text-red-600 border-gray-300 rounded focus:ring-red-500 purchase-checkbox" data-type="stock" data-index="${index}">
                     <div class="flex-1">
                         <p class="font-semibold text-gray-800">${item.name}</p>
                         <div class="flex justify-between text-xs text-gray-600 mt-1">
@@ -1478,14 +726,12 @@ const setupSearchableDropdown = (searchInputId, hiddenInputId, resultsListId, da
             `).join('');
         }
 
-        // B. Renderizar Solicitudes de Usuarios
         if (data.purchaseRequests.length === 0) {
             reqListEl.innerHTML = '<p class="text-gray-500 text-sm p-2">No hay solicitudes pendientes.</p>';
         } else {
             reqListEl.innerHTML = data.purchaseRequests.map((req, index) => `
                 <div class="flex items-start p-3 border-b bg-white hover:bg-blue-50 transition">
-                    <input type="checkbox" class="mt-1 mr-3 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 purchase-checkbox" 
-                        data-type="request" data-index="${index}">
+                    <input type="checkbox" class="mt-1 mr-3 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 purchase-checkbox" data-type="request" data-index="${index}">
                     <div class="flex-1">
                         <p class="font-semibold text-gray-800">${req.name}</p>
                         <p class="text-xs text-gray-500">Por: ${req.requester}</p>
@@ -1497,7 +743,6 @@ const setupSearchableDropdown = (searchInputId, hiddenInputId, resultsListId, da
             `).join('');
         }
 
-        // Listeners para los checkboxes individuales
         document.querySelectorAll('.purchase-checkbox').forEach(cb => {
             cb.addEventListener('change', (e) => {
                 const type = e.target.dataset.type;
@@ -1505,8 +750,7 @@ const setupSearchableDropdown = (searchInputId, hiddenInputId, resultsListId, da
                 const item = type === 'stock' ? purchaseDataCache.lowStockItems[index] : purchaseDataCache.purchaseRequests[index];
 
                 if (e.target.checked) {
-                    if (type === 'stock') purchaseSelection.stock.push(item);
-                    else purchaseSelection.requests.push(item);
+                    if (type === 'stock') purchaseSelection.stock.push(item); else purchaseSelection.requests.push(item);
                 } else {
                     if (type === 'stock') purchaseSelection.stock = purchaseSelection.stock.filter(i => i.id !== item.id);
                     else purchaseSelection.requests = purchaseSelection.requests.filter(i => i.id !== item.id);
@@ -1516,14 +760,12 @@ const setupSearchableDropdown = (searchInputId, hiddenInputId, resultsListId, da
         });
     };
 
-    // 3. Actualizar UI de selección
     const updatePurchaseUI = () => {
         const total = purchaseSelection.stock.length + purchaseSelection.requests.length;
         if (purchaseCountSpan) purchaseCountSpan.textContent = total;
         if (btnGenerateOrder) btnGenerateOrder.disabled = total === 0;
     };
 
-    // 4. Listeners de "Seleccionar Todos"
     const setupSelectAllListeners = () => {
         const selectAllStock = document.getElementById('select-all-stock');
         const selectAllReqs = document.getElementById('select-all-reqs');
@@ -1531,24 +773,17 @@ const setupSearchableDropdown = (searchInputId, hiddenInputId, resultsListId, da
         if (selectAllStock) {
             selectAllStock.addEventListener('change', (e) => {
                 const checkboxes = document.querySelectorAll('.purchase-checkbox[data-type="stock"]');
-                checkboxes.forEach(cb => {
-                    cb.checked = e.target.checked;
-                    cb.dispatchEvent(new Event('change')); // Disparar lógica individual
-                });
+                checkboxes.forEach(cb => { cb.checked = e.target.checked; cb.dispatchEvent(new Event('change')); });
             });
         }
         if (selectAllReqs) {
             selectAllReqs.addEventListener('change', (e) => {
                 const checkboxes = document.querySelectorAll('.purchase-checkbox[data-type="request"]');
-                checkboxes.forEach(cb => {
-                    cb.checked = e.target.checked;
-                    cb.dispatchEvent(new Event('change'));
-                });
+                checkboxes.forEach(cb => { cb.checked = e.target.checked; cb.dispatchEvent(new Event('change')); });
             });
         }
     };
 
-    // 5. Generación de PDF de Orden de Compra (Cliente)
     const generatePurchaseOrderPDF = async (orderData) => {
         const PDFLib = await loadPdfLib();
         if (!PDFLib) throw new Error('No se pudo cargar PDF-Lib');
@@ -1561,134 +796,162 @@ const setupSearchableDropdown = (searchInputId, hiddenInputId, resultsListId, da
         const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
         let yPos = height - 50;
-
-        // Encabezado
         page.drawText('ORDEN DE COMPRA', { x: 50, y: yPos, size: 20, font: fontBold });
         yPos -= 30;
         page.drawText(`Fecha: ${new Date().toLocaleDateString()}`, { x: 50, y: yPos, size: 12, font });
-        page.drawText(`Proveedor: ${orderData.provider}`, { x: 300, y: yPos, size: 12, font });
+        page.drawText(`Proveedor: ${orderData.providerName}`, { x: 300, y: yPos, size: 12, font });
         yPos -= 20;
         page.drawText(`Entrega Estimada: ${orderData.deliveryDate}`, { x: 50, y: yPos, size: 12, font });
-        
-        if (orderData.notes) {
-            yPos -= 20;
-            page.drawText(`Notas: ${orderData.notes}`, { x: 50, y: yPos, size: 10, font, color: rgb(0.4, 0.4, 0.4) });
-        }
-
+        if (orderData.notes) { yPos -= 20; page.drawText(`Notas: ${orderData.notes}`, { x: 50, y: yPos, size: 10, font, color: rgb(0.4, 0.4, 0.4) }); }
         yPos -= 40;
-
-        // Tabla de Ítems
         page.drawText('CANT', { x: 50, y: yPos, size: 10, font: fontBold });
         page.drawText('DESCRIPCIÓN / PRODUCTO', { x: 100, y: yPos, size: 10, font: fontBold });
         page.drawText('TIPO', { x: 450, y: yPos, size: 10, font: fontBold });
-        
         yPos -= 5;
         page.drawLine({ start: { x: 50, y: yPos }, end: { x: 550, y: yPos }, thickness: 1, color: rgb(0, 0, 0) });
         yPos -= 20;
 
-        // Listar Stock Bajo
         purchaseSelection.stock.forEach(item => {
-            if (yPos < 50) { page = pdfDoc.addPage(); yPos = height - 50; } // Nueva página si se acaba espacio
+            if (yPos < 50) { page = pdfDoc.addPage(); yPos = height - 50; }
             page.drawText(`${item.suggestedQty}`, { x: 50, y: yPos, size: 10, font });
             page.drawText(`${item.name} (SKU: ${item.sku})`, { x: 100, y: yPos, size: 10, font });
             page.drawText(`Reposición`, { x: 450, y: yPos, size: 9, font, color: rgb(0.6, 0, 0) });
             yPos -= 20;
         });
 
-        // Listar Solicitudes
         purchaseSelection.requests.forEach(item => {
             if (yPos < 50) { page = pdfDoc.addPage(); yPos = height - 50; }
             page.drawText(`${item.quantity}`, { x: 50, y: yPos, size: 10, font });
             page.drawText(`${item.name}`, { x: 100, y: yPos, size: 10, font });
-            // Descripción pequeña abajo
             page.drawText(`Ref: ${item.justification || ''}`, { x: 100, y: yPos - 10, size: 8, font, color: rgb(0.5, 0.5, 0.5) });
             page.drawText(`Solicitud`, { x: 450, y: yPos, size: 9, font, color: rgb(0, 0, 0.6) });
             yPos -= 30;
         });
 
-        // Firmas
         yPos -= 50;
         if (yPos < 100) { page = pdfDoc.addPage(); yPos = height - 150; }
-        
         page.drawLine({ start: { x: 50, y: yPos }, end: { x: 200, y: yPos }, thickness: 1 });
         page.drawText('Autorizado por', { x: 80, y: yPos - 15, size: 10, font });
         page.drawText(appState.userProfile.email, { x: 50, y: yPos - 30, size: 8, font, color: rgb(0.5, 0.5, 0.5) });
 
         const pdfBytes = await pdfDoc.saveAsBase64({ dataUri: false });
-        return pdfBytes; // Devolvemos base64 para enviar por correo
+        return pdfBytes;
     };
 
-    // 6. Manejo del Modal y Envío
-    const modal = document.getElementById('order-modal');
-    const form = document.getElementById('order-details-form');
-    const cancelBtn = document.getElementById('btn-cancel-order');
+    const setupDashboardTabs = () => {
+        const tabButtons = document.querySelectorAll('.request-tab-btn');
+        const tabContents = document.querySelectorAll('.request-tab-content');
 
-    if (btnGenerateOrder) {
-        btnGenerateOrder.addEventListener('click', () => {
-            modal.classList.remove('hidden');
+        tabButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const targetId = btn.dataset.target;
+                tabButtons.forEach(b => {
+                    b.classList.remove('border-blue-500', 'text-blue-600');
+                    b.classList.add('border-transparent', 'text-gray-500');
+                });
+                btn.classList.remove('border-transparent', 'text-gray-500');
+                btn.classList.add('border-blue-500', 'text-blue-600');
+
+                tabContents.forEach(content => {
+                    content.classList.toggle('hidden', content.id !== targetId);
+                    content.classList.toggle('block', content.id === targetId);
+                });
+            });
         });
-    }
-    if (cancelBtn) {
-        cancelBtn.addEventListener('click', () => {
-            modal.classList.add('hidden');
-            form.reset();
+    };
+
+    // --- EVENT LISTENERS GLOBALES ---
+    
+    // Listeners de Navegación
+    navLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const viewId = e.currentTarget.dataset.view;
+            showView(viewId);
+            if (viewId === 'admin-view') { renderPendingRequestsTable(); populateAssetDropdown(); }
+            if (viewId === 'reports-view') loadReportsView();
+            if (viewId === 'inventory-view') renderFullInventory();
+            if (viewId === 'purchases-view') { loadPurchasesView(); loadProviders(); }
         });
-    }
+    });
+
+    // Listener para login
+    if (loginForm) loginForm.addEventListener('submit', handleLoginRequest);
+    if (logoutButton) logoutButton.addEventListener('click', handleLogout);
+
+    // Listener búsqueda
+    document.body.addEventListener('input', (e) => {
+        if (e.target.id === 'inventory-search-input') {
+            const searchTerm = e.target.value.toLowerCase();
+            const filteredInventory = (appState.fullInventory || []).filter(item =>
+                item.name.toLowerCase().includes(searchTerm) || item.sku.toLowerCase().includes(searchTerm) || item.family.toLowerCase().includes(searchTerm)
+            );
+            appState.currentInventoryView = filteredInventory;
+            renderInventoryTable(appState.currentInventoryView);
+        }
+        if (e.target.id === 'search-input') {
+            const searchTerm = e.target.value.toLowerCase();
+            const userRequests = appState.requests || [];
+            const filteredRequests = userRequests.filter(req => {
+                const catalogItem = appState.catalog.find(cItem => cItem.id === req.item);
+                const itemName = catalogItem ? catalogItem.name.toLowerCase() : '';
+                return itemName.includes(searchTerm) || (req.status && req.status.toLowerCase().includes(searchTerm));
+            });
+            renderUserRequestsTable(filteredRequests);
+        }
+    });
+
+    // Listeners de Compras
+    if (btnGenerateOrder) btnGenerateOrder.addEventListener('click', () => modal.classList.remove('hidden'));
+    if (cancelBtn) cancelBtn.addEventListener('click', () => { modal.classList.add('hidden'); form.reset(); });
+    
     if (form) {
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             const submitBtn = form.querySelector('button[type="submit"]');
             submitBtn.disabled = true; submitBtn.textContent = 'Procesando...';
-
             const orderData = {
-                providerId: document.getElementById('provider-select').value, // ID oculto
-                providerName: document.getElementById('provider-search-input').value, // Nombre visible
+                providerId: document.getElementById('provider-select').value,
+                providerName: document.getElementById('provider-search-input').value,
                 providerEmail: document.getElementById('provider-email-display').textContent,
-                totalCost: document.getElementById('order-cost').value, // NUEVO CAMPO
+                totalCost: document.getElementById('order-cost').value,
                 deliveryDate: document.getElementById('order-date').value,
                 notes: document.getElementById('order-notes').value
-            
             };
-
             try {
-                // A. Generar PDF en memoria
                 const pdfBase64 = await generatePurchaseOrderPDF(orderData);
-
-                // B. Enviar al backend
                 await authenticatedFetch('/.netlify/functions/procesar-orden-compra', {
                     method: 'POST',
-                    body: JSON.stringify({
-                        pdfBase64: pdfBase64,
-                        orderData: orderData,
-                        selectedRequests: purchaseSelection.requests // Enviamos solo las solicitudes para actualizar su estatus
-                    })
+                    body: JSON.stringify({ pdfBase64, orderData, selectedRequests: purchaseSelection.requests })
                 });
-
-                showToast('Orden generada y notificaciones enviadas.');
-                modal.classList.add('hidden');
-                form.reset();
-                
-                // C. Recargar la vista
-                loadPurchasesView();
-
-            } catch (error) {
-                console.error(error);
-                showToast(error.message, true);
-            } finally {
-                submitBtn.disabled = false; submitBtn.textContent = 'Confirmar';
-            }
+                showToast('Orden generada.');
+                modal.classList.add('hidden'); form.reset(); loadPurchasesView();
+            } catch (error) { console.error(error); showToast(error.message, true); } 
+            finally { submitBtn.disabled = false; submitBtn.textContent = 'Confirmar Orden'; }
         });
     }
 
-    // Inicialización de listeners
+    if(btnNewProv) {
+        btnNewProv.addEventListener('click', () => modalProv.classList.remove('hidden'));
+        document.getElementById('btn-cancel-prov').addEventListener('click', () => modalProv.classList.add('hidden'));
+        formProv.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = {
+                name: document.getElementById('new-prov-name').value,
+                contact: document.getElementById('new-prov-contact').value,
+                email: document.getElementById('new-prov-email').value,
+                phone: document.getElementById('new-prov-phone').value
+            };
+            try {
+                await authenticatedFetch('/.netlify/functions/crear-proveedor', { method: 'POST', body: JSON.stringify(payload) });
+                showToast('Proveedor registrado'); modalProv.classList.add('hidden'); formProv.reset(); loadProviders();
+            } catch (error) { showToast(error.message, true); }
+        });
+    }
+
+    // Inicializar componentes finales
     setupSelectAllListeners();
-
-    // AGREGAR AL ROUTER EXISTENTE (dentro del evento click de navLinks)
-    // Buscar la línea: if (viewId === 'inventory-view') renderFullInventory();
-    // y agregar justo debajo:
-    // if (viewId === 'purchases-view') loadPurchasesView();
-
-    // --- 6. LLAMADA INICIAL DE LA APLICACIÓN ---
+    setupDashboardTabs();
     bootstrapApp();
 
 });

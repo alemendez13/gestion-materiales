@@ -63,7 +63,33 @@
                                 <input type="search" id="search-input" placeholder="Buscar por insumo o estatus..." class="w-full p-2 border border-gray-300 rounded-md">
                             </div>
                         </div>
-                        <div id="requests-table-container" class="bg-white p-6 rounded-lg shadow-sm"></div>
+
+                        <div class="bg-white p-6 rounded-lg shadow-sm">
+                            
+                            <div class="border-b border-gray-200 mb-4">
+                                <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                                    <button id="tab-btn-pending" class="request-tab-btn border-blue-500 text-blue-600 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm" data-target="tab-pending">
+                                        Pendientes <span id="count-pending" class="ml-2 bg-gray-100 text-gray-900 py-0.5 px-2.5 rounded-full text-xs">0</span>
+                                    </button>
+                                    <button id="tab-btn-approved" class="request-tab-btn border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm" data-target="tab-approved">
+                                        Aprobadas
+                                    </button>
+                                    <button id="tab-btn-rejected" class="request-tab-btn border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm" data-target="tab-rejected">
+                                        Rechazadas
+                                    </button>
+                                </nav>
+                            </div>
+
+                            <div id="tab-pending" class="request-tab-content block">
+                                <div id="requests-pending-container"></div>
+                            </div>
+                            <div id="tab-approved" class="request-tab-content hidden">
+                                <div id="requests-approved-container"></div>
+                            </div>
+                            <div id="tab-rejected" class="request-tab-content hidden">
+                                <div id="requests-rejected-container"></div>
+                            </div>
+                        </div>
                     </section>
                 
                     <section id="new-request-view" class="view hidden">
@@ -306,6 +332,26 @@
                     <section id="purchases-view" class="view hidden">
                         <h2 class="text-3xl font-semibold text-gray-700 mb-6">Gestión de Compras y Aprobaciones</h2>
                         
+                        <button id="btn-new-provider" class="mb-4 bg-gray-600 text-white px-3 py-2 rounded-md text-sm hover:bg-gray-700 flex items-center">
+                            <span class="material-icons text-sm mr-2">person_add</span> Nuevo Proveedor
+                        </button>
+
+                        <div id="new-provider-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden flex items-center justify-center z-50">
+                            <div class="bg-white p-6 rounded-lg shadow-xl w-96">
+                                <h3 class="text-lg font-bold mb-4">Registrar Proveedor</h3>
+                                <form id="new-provider-form">
+                                    <input type="text" id="new-prov-name" placeholder="Nombre Empresa*" required class="w-full mb-3 p-2 border rounded">
+                                    <input type="text" id="new-prov-contact" placeholder="Nombre Contacto" class="w-full mb-3 p-2 border rounded">
+                                    <input type="email" id="new-prov-email" placeholder="Email Contacto" class="w-full mb-3 p-2 border rounded">
+                                    <input type="tel" id="new-prov-phone" placeholder="Teléfono" class="w-full mb-3 p-2 border rounded">
+                                    <div class="flex justify-end gap-2">
+                                        <button type="button" id="btn-cancel-prov" class="px-3 py-1 text-gray-600">Cancelar</button>
+                                        <button type="submit" class="px-3 py-1 bg-blue-600 text-white rounded">Guardar</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             <div class="bg-white p-6 rounded-lg shadow-sm border border-red-100">
                                 <div class="flex justify-between items-center mb-4">
