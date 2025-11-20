@@ -44,6 +44,7 @@
                     <li><a href="#" class="nav-link active" data-view="dashboard-view"><span class="material-icons">dashboard</span>Dashboard</a></li>
                     <li><a href="#" class="nav-link" data-view="new-request-view"><span class="material-icons">add_shopping_cart</span>Nueva Solicitud</a></li>
                     <li id="admin-nav-link" class="hidden"><a href="#" class="nav-link" data-view="admin-view"><span class="material-icons">admin_panel_settings</span>Administración</a></li>
+                    <li id="purchases-nav-link" class="hidden"><a href="#" class="nav-link" data-view="purchases-view"><span class="material-icons">shopping_bag</span>Compras</a></li>
                     <li id="reports-nav-link" class="hidden"><a href="#" class="nav-link" data-view="reports-view"><span class="material-icons">assessment</span>Reportes</a></li>
                     <li><a href="#" class="nav-link" data-view="inventory-view"><span class="material-icons">inventory</span>Inventario General</a></li>
                 </ul>
@@ -301,6 +302,77 @@
                     </div>
                         </div>
                     </section>
+
+                    <section id="purchases-view" class="view hidden">
+                        <h2 class="text-3xl font-semibold text-gray-700 mb-6">Gestión de Compras y Aprobaciones</h2>
+                        
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div class="bg-white p-6 rounded-lg shadow-sm border border-red-100">
+                                <div class="flex justify-between items-center mb-4">
+                                    <h3 class="text-xl font-bold text-red-600 flex items-center">
+                                        <span class="material-icons mr-2">warning</span> Stock Crítico
+                                    </h3>
+                                    <label class="flex items-center space-x-2 text-sm">
+                                        <input type="checkbox" id="select-all-stock" class="rounded text-red-600 focus:ring-red-500">
+                                        <span>Sel. Todos</span>
+                                    </label>
+                                </div>
+                                <div id="purchase-stock-list" class="overflow-y-auto h-96 pr-2 space-y-2">
+                                    <p class="text-gray-500 text-sm">Cargando...</p>
+                                </div>
+                            </div>
+
+                            <div class="bg-white p-6 rounded-lg shadow-sm border border-blue-100">
+                                <div class="flex justify-between items-center mb-4">
+                                    <h3 class="text-xl font-bold text-blue-600 flex items-center">
+                                        <span class="material-icons mr-2">assignment_late</span> Solicitudes Usuarios
+                                    </h3>
+                                    <label class="flex items-center space-x-2 text-sm">
+                                        <input type="checkbox" id="select-all-reqs" class="rounded text-blue-600 focus:ring-blue-500">
+                                        <span>Sel. Todos</span>
+                                    </label>
+                                </div>
+                                <div id="purchase-requests-list" class="overflow-y-auto h-96 pr-2 space-y-2">
+                                    <p class="text-gray-500 text-sm">Cargando...</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-8 bg-gray-50 p-6 rounded-lg border border-gray-200 flex flex-col md:flex-row justify-between items-center">
+                            <div class="mb-4 md:mb-0">
+                                <p class="text-lg font-medium text-gray-700">Items Seleccionados: <span id="purchase-count" class="font-bold">0</span></p>
+                                <p class="text-sm text-gray-500">Selecciona los ítems para generar la Orden de Compra.</p>
+                            </div>
+                            <button id="btn-generate-order" class="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 flex items-center shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                                <span class="material-icons mr-2">shopping_cart_checkout</span>
+                                Autorizar y Generar Orden
+                            </button>
+                        </div>
+                    </section>
+
+                    <div id="order-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden flex items-center justify-center z-50">
+                        <div class="bg-white p-8 rounded-lg shadow-xl w-96">
+                            <h3 class="text-xl font-bold mb-4 text-gray-800">Detalles de la Orden</h3>
+                            <form id="order-details-form">
+                                <div class="mb-4">
+                                    <label class="block text-sm font-medium text-gray-700">Proveedor Asignado</label>
+                                    <input type="text" id="order-provider" required class="mt-1 block w-full border rounded-md p-2" placeholder="Ej. Office Depot">
+                                </div>
+                                <div class="mb-4">
+                                    <label class="block text-sm font-medium text-gray-700">Fecha Entrega Estimada</label>
+                                    <input type="date" id="order-date" required class="mt-1 block w-full border rounded-md p-2">
+                                </div>
+                                <div class="mb-6">
+                                    <label class="block text-sm font-medium text-gray-700">Notas Adicionales</label>
+                                    <textarea id="order-notes" rows="2" class="mt-1 block w-full border rounded-md p-2"></textarea>
+                                </div>
+                                <div class="flex justify-end space-x-3">
+                                    <button type="button" id="btn-cancel-order" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md">Cancelar</button>
+                                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-md">Confirmar</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
 
                     <section id="inventory-view" class="view hidden">
                                             <h2 class="text-3xl font-semibold text-gray-700 mb-4">Inventario General</h2>

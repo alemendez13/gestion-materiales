@@ -276,6 +276,9 @@ document.addEventListener('DOMContentLoaded', () => {
     /**
      * Configura la UI basada en el rol del usuario.
      */
+    /**
+     * Configura la UI basada en el rol del usuario.
+     */
     const showAppForUser = (profile) => {
         if (!profile) return;
 
@@ -288,16 +291,25 @@ document.addEventListener('DOMContentLoaded', () => {
         userRoleDisplay.textContent = profile.role;
 
         const role = profile.role.trim().toLowerCase();
+        
+        // Referencia al link de compras
+        const purchasesNavLink = document.getElementById('purchases-nav-link');
 
         if (role === 'admin') {
             adminNavLink.classList.remove('hidden');
             reportsNavLink.classList.remove('hidden');
+            // Mostrar Compras solo a Admin
+            if (purchasesNavLink) purchasesNavLink.classList.remove('hidden');
         } else if (role === 'supervisor') {
             adminNavLink.classList.remove('hidden');
             reportsNavLink.classList.add('hidden');
+            // Ocultar Compras a Supervisor
+            if (purchasesNavLink) purchasesNavLink.classList.add('hidden');
         } else {
             adminNavLink.classList.add('hidden');
             reportsNavLink.classList.add('hidden');
+            // Ocultar Compras a Usuario
+            if (purchasesNavLink) purchasesNavLink.classList.add('hidden');
         }
     };
 
@@ -852,6 +864,9 @@ const setupSearchableDropdown = (searchInputId, hiddenInputId, resultsListId, da
             }
             if (viewId === 'reports-view') loadReportsView();
             if (viewId === 'inventory-view') renderFullInventory();
+            
+            // --- AQUÍ ESTABA FALTANDO ESTA LÍNEA ---
+            if (viewId === 'purchases-view') loadPurchasesView(); 
         });
     });
 
@@ -1354,6 +1369,269 @@ const setupSearchableDropdown = (searchInputId, hiddenInputId, resultsListId, da
             renderUserRequestsTable(filteredRequests);
         }
     });
+
+    // --- MÓDULO DE GESTIÓN DE COMPRAS (FASE 2) ---
+
+    const purchasesNavElement = document.getElementById('purchases-nav-link');
+    const btnGenerateOrder = document.getElementById('btn-generate-order');
+    const purchaseCountSpan = document.getElementById('purchase-count');
+    
+    // Variables de estado local para compras
+    let purchaseSelection = { stock: [], requests: [] };
+    let purchaseDataCache = null;
+
+    // 1. Función para cargar datos de compras (Stock Bajo + Solicitudes)
+    const loadPurchasesView = async () => {
+        const stockListEl = document.getElementById('purchase-stock-list');
+        const reqListEl = document.getElementById('purchase-requests-list');
+        
+        stockListEl.innerHTML = '<div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-6 w-6 mx-auto"></div>';
+        reqListEl.innerHTML = '<div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-6 w-6 mx-auto"></div>';
+
+        try {
+            const data = await authenticatedFetch('/.netlify/functions/obtener-datos-compras', { method: 'POST' });
+            purchaseDataCache = data; // Guardar en caché local
+            renderPurchaseLists(data);
+        } catch (error) {
+            showToast(error.message, true);
+            stockListEl.innerHTML = '<p class="text-red-500 text-sm">Error al cargar.</p>';
+            reqListEl.innerHTML = '<p class="text-red-500 text-sm">Error al cargar.</p>';
+        }
+    };
+
+    // 2. Renderizar las listas con Checkboxes
+    const renderPurchaseLists = (data) => {
+        const stockListEl = document.getElementById('purchase-stock-list');
+        const reqListEl = document.getElementById('purchase-requests-list');
+        
+        // Limpiar estado de selección
+        purchaseSelection = { stock: [], requests: [] };
+        updatePurchaseUI();
+
+        // A. Renderizar Stock Bajo
+        if (data.lowStockItems.length === 0) {
+            stockListEl.innerHTML = '<p class="text-gray-500 text-sm p-2">Todo el stock está saludable.</p>';
+        } else {
+            stockListEl.innerHTML = data.lowStockItems.map((item, index) => `
+                <div class="flex items-start p-3 border-b bg-white hover:bg-red-50 transition">
+                    <input type="checkbox" class="mt-1 mr-3 h-4 w-4 text-red-600 border-gray-300 rounded focus:ring-red-500 purchase-checkbox" 
+                        data-type="stock" data-index="${index}">
+                    <div class="flex-1">
+                        <p class="font-semibold text-gray-800">${item.name}</p>
+                        <div class="flex justify-between text-xs text-gray-600 mt-1">
+                            <span>Stock: <strong class="text-red-600">${item.currentStock}</strong> / Min: ${item.minStock}</span>
+                            <span class="bg-red-100 text-red-800 px-2 py-0.5 rounded">Sugerido: +${item.suggestedQty} ${item.unit || ''}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // B. Renderizar Solicitudes de Usuarios
+        if (data.purchaseRequests.length === 0) {
+            reqListEl.innerHTML = '<p class="text-gray-500 text-sm p-2">No hay solicitudes pendientes.</p>';
+        } else {
+            reqListEl.innerHTML = data.purchaseRequests.map((req, index) => `
+                <div class="flex items-start p-3 border-b bg-white hover:bg-blue-50 transition">
+                    <input type="checkbox" class="mt-1 mr-3 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 purchase-checkbox" 
+                        data-type="request" data-index="${index}">
+                    <div class="flex-1">
+                        <p class="font-semibold text-gray-800">${req.name}</p>
+                        <p class="text-xs text-gray-500">Por: ${req.requester}</p>
+                        <div class="mt-1 text-xs bg-gray-100 p-1 rounded">
+                            <span class="font-bold">Cant: ${req.quantity}</span> - ${req.justification || 'Sin justificación'}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Listeners para los checkboxes individuales
+        document.querySelectorAll('.purchase-checkbox').forEach(cb => {
+            cb.addEventListener('change', (e) => {
+                const type = e.target.dataset.type;
+                const index = e.target.dataset.index;
+                const item = type === 'stock' ? purchaseDataCache.lowStockItems[index] : purchaseDataCache.purchaseRequests[index];
+
+                if (e.target.checked) {
+                    if (type === 'stock') purchaseSelection.stock.push(item);
+                    else purchaseSelection.requests.push(item);
+                } else {
+                    if (type === 'stock') purchaseSelection.stock = purchaseSelection.stock.filter(i => i.id !== item.id);
+                    else purchaseSelection.requests = purchaseSelection.requests.filter(i => i.id !== item.id);
+                }
+                updatePurchaseUI();
+            });
+        });
+    };
+
+    // 3. Actualizar UI de selección
+    const updatePurchaseUI = () => {
+        const total = purchaseSelection.stock.length + purchaseSelection.requests.length;
+        if (purchaseCountSpan) purchaseCountSpan.textContent = total;
+        if (btnGenerateOrder) btnGenerateOrder.disabled = total === 0;
+    };
+
+    // 4. Listeners de "Seleccionar Todos"
+    const setupSelectAllListeners = () => {
+        const selectAllStock = document.getElementById('select-all-stock');
+        const selectAllReqs = document.getElementById('select-all-reqs');
+
+        if (selectAllStock) {
+            selectAllStock.addEventListener('change', (e) => {
+                const checkboxes = document.querySelectorAll('.purchase-checkbox[data-type="stock"]');
+                checkboxes.forEach(cb => {
+                    cb.checked = e.target.checked;
+                    cb.dispatchEvent(new Event('change')); // Disparar lógica individual
+                });
+            });
+        }
+        if (selectAllReqs) {
+            selectAllReqs.addEventListener('change', (e) => {
+                const checkboxes = document.querySelectorAll('.purchase-checkbox[data-type="request"]');
+                checkboxes.forEach(cb => {
+                    cb.checked = e.target.checked;
+                    cb.dispatchEvent(new Event('change'));
+                });
+            });
+        }
+    };
+
+    // 5. Generación de PDF de Orden de Compra (Cliente)
+    const generatePurchaseOrderPDF = async (orderData) => {
+        const PDFLib = await loadPdfLib();
+        if (!PDFLib) throw new Error('No se pudo cargar PDF-Lib');
+        
+        const { PDFDocument, rgb, StandardFonts } = PDFLib;
+        const pdfDoc = await PDFDocument.create();
+        const page = pdfDoc.addPage();
+        const { width, height } = page.getSize();
+        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+        let yPos = height - 50;
+
+        // Encabezado
+        page.drawText('ORDEN DE COMPRA', { x: 50, y: yPos, size: 20, font: fontBold });
+        yPos -= 30;
+        page.drawText(`Fecha: ${new Date().toLocaleDateString()}`, { x: 50, y: yPos, size: 12, font });
+        page.drawText(`Proveedor: ${orderData.provider}`, { x: 300, y: yPos, size: 12, font });
+        yPos -= 20;
+        page.drawText(`Entrega Estimada: ${orderData.deliveryDate}`, { x: 50, y: yPos, size: 12, font });
+        
+        if (orderData.notes) {
+            yPos -= 20;
+            page.drawText(`Notas: ${orderData.notes}`, { x: 50, y: yPos, size: 10, font, color: rgb(0.4, 0.4, 0.4) });
+        }
+
+        yPos -= 40;
+
+        // Tabla de Ítems
+        page.drawText('CANT', { x: 50, y: yPos, size: 10, font: fontBold });
+        page.drawText('DESCRIPCIÓN / PRODUCTO', { x: 100, y: yPos, size: 10, font: fontBold });
+        page.drawText('TIPO', { x: 450, y: yPos, size: 10, font: fontBold });
+        
+        yPos -= 5;
+        page.drawLine({ start: { x: 50, y: yPos }, end: { x: 550, y: yPos }, thickness: 1, color: rgb(0, 0, 0) });
+        yPos -= 20;
+
+        // Listar Stock Bajo
+        purchaseSelection.stock.forEach(item => {
+            if (yPos < 50) { page = pdfDoc.addPage(); yPos = height - 50; } // Nueva página si se acaba espacio
+            page.drawText(`${item.suggestedQty}`, { x: 50, y: yPos, size: 10, font });
+            page.drawText(`${item.name} (SKU: ${item.sku})`, { x: 100, y: yPos, size: 10, font });
+            page.drawText(`Reposición`, { x: 450, y: yPos, size: 9, font, color: rgb(0.6, 0, 0) });
+            yPos -= 20;
+        });
+
+        // Listar Solicitudes
+        purchaseSelection.requests.forEach(item => {
+            if (yPos < 50) { page = pdfDoc.addPage(); yPos = height - 50; }
+            page.drawText(`${item.quantity}`, { x: 50, y: yPos, size: 10, font });
+            page.drawText(`${item.name}`, { x: 100, y: yPos, size: 10, font });
+            // Descripción pequeña abajo
+            page.drawText(`Ref: ${item.justification || ''}`, { x: 100, y: yPos - 10, size: 8, font, color: rgb(0.5, 0.5, 0.5) });
+            page.drawText(`Solicitud`, { x: 450, y: yPos, size: 9, font, color: rgb(0, 0, 0.6) });
+            yPos -= 30;
+        });
+
+        // Firmas
+        yPos -= 50;
+        if (yPos < 100) { page = pdfDoc.addPage(); yPos = height - 150; }
+        
+        page.drawLine({ start: { x: 50, y: yPos }, end: { x: 200, y: yPos }, thickness: 1 });
+        page.drawText('Autorizado por', { x: 80, y: yPos - 15, size: 10, font });
+        page.drawText(appState.userProfile.email, { x: 50, y: yPos - 30, size: 8, font, color: rgb(0.5, 0.5, 0.5) });
+
+        const pdfBytes = await pdfDoc.saveAsBase64({ dataUri: false });
+        return pdfBytes; // Devolvemos base64 para enviar por correo
+    };
+
+    // 6. Manejo del Modal y Envío
+    const modal = document.getElementById('order-modal');
+    const form = document.getElementById('order-details-form');
+    const cancelBtn = document.getElementById('btn-cancel-order');
+
+    if (btnGenerateOrder) {
+        btnGenerateOrder.addEventListener('click', () => {
+            modal.classList.remove('hidden');
+        });
+    }
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => {
+            modal.classList.add('hidden');
+            form.reset();
+        });
+    }
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const submitBtn = form.querySelector('button[type="submit"]');
+            submitBtn.disabled = true; submitBtn.textContent = 'Procesando...';
+
+            const orderData = {
+                provider: document.getElementById('order-provider').value,
+                deliveryDate: document.getElementById('order-date').value,
+                notes: document.getElementById('order-notes').value
+            };
+
+            try {
+                // A. Generar PDF en memoria
+                const pdfBase64 = await generatePurchaseOrderPDF(orderData);
+
+                // B. Enviar al backend
+                await authenticatedFetch('/.netlify/functions/procesar-orden-compra', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        pdfBase64: pdfBase64,
+                        orderData: orderData,
+                        selectedRequests: purchaseSelection.requests // Enviamos solo las solicitudes para actualizar su estatus
+                    })
+                });
+
+                showToast('Orden generada y notificaciones enviadas.');
+                modal.classList.add('hidden');
+                form.reset();
+                
+                // C. Recargar la vista
+                loadPurchasesView();
+
+            } catch (error) {
+                console.error(error);
+                showToast(error.message, true);
+            } finally {
+                submitBtn.disabled = false; submitBtn.textContent = 'Confirmar';
+            }
+        });
+    }
+
+    // Inicialización de listeners
+    setupSelectAllListeners();
+
+    // AGREGAR AL ROUTER EXISTENTE (dentro del evento click de navLinks)
+    // Buscar la línea: if (viewId === 'inventory-view') renderFullInventory();
+    // y agregar justo debajo:
+    // if (viewId === 'purchases-view') loadPurchasesView();
 
     // --- 6. LLAMADA INICIAL DE LA APLICACIÓN ---
     bootstrapApp();
