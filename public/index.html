@@ -399,41 +399,41 @@
                     <div id="order-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden flex items-center justify-center z-50">
                         <div class="bg-white p-8 rounded-lg shadow-xl w-[500px]"> <h3 class="text-xl font-bold mb-4 text-gray-800 border-b pb-2">Generar Orden de Compra</h3>
                             <form id="order-details-form">
-                                
-                                <div class="mb-4 search-container">
-                                    <label class="block text-sm font-medium text-gray-700">Proveedor*</label>
-                                    <input type="text" id="provider-search-input" required class="mt-1 block w-full border rounded-md p-2" placeholder="Buscar proveedor..." autocomplete="off">
-                                    <input type="hidden" id="provider-select">
-                                    <ul id="provider-search-results" class="search-results-list hidden"></ul>
-                                    <p id="provider-email-display" class="text-xs text-blue-600 mt-1 h-4"></p>
-                                </div>
+    
+    <div class="mb-4 search-container">
+        <label for="provider-search-input" class="block text-sm font-medium text-gray-700">Proveedor*</label>
+        <input type="text" id="provider-search-input" required class="mt-1 block w-full border rounded-md p-2" placeholder="Buscar proveedor..." autocomplete="off">
+        <input type="hidden" id="provider-select">
+        <ul id="provider-search-results" class="search-results-list hidden"></ul>
+        <p id="provider-email-display" class="text-xs text-blue-600 mt-1 h-4"></p>
+    </div>
 
-                                <div class="mb-4">
-                                    <label class="block text-sm font-medium text-gray-700">Costo Total Cotizado ($)*</label>
-                                    <div class="relative mt-1 rounded-md shadow-sm">
-                                        <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                                            <span class="text-gray-500 sm:text-sm">$</span>
-                                        </div>
-                                        <input type="number" id="order-cost" required min="0" step="0.01" class="block w-full rounded-md border-gray-300 pl-7 p-2 border" placeholder="0.00">
-                                    </div>
-                                    <p id="price-history-hint" class="text-xs text-green-600 mt-1 italic"></p>
-                                </div>
+    <div class="mb-4">
+        <label for="order-cost" class="block text-sm font-medium text-gray-700">Costo Total Cotizado ($)*</label>
+        <div class="relative mt-1 rounded-md shadow-sm">
+            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                <span class="text-gray-500 sm:text-sm">$</span>
+            </div>
+            <input type="number" id="order-cost" required min="0" step="0.01" class="block w-full rounded-md border-gray-300 pl-7 p-2 border" placeholder="0.00">
+        </div>
+        <p id="price-history-hint" class="text-xs text-green-600 mt-1 italic"></p>
+    </div>
 
-                                <div class="mb-4">
-                                    <label class="block text-sm font-medium text-gray-700">Fecha Entrega Estimada*</label>
-                                    <input type="date" id="order-date" required class="mt-1 block w-full border rounded-md p-2">
-                                </div>
+    <div class="mb-4">
+        <label for="order-date" class="block text-sm font-medium text-gray-700">Fecha Entrega Estimada*</label>
+        <input type="date" id="order-date" required class="mt-1 block w-full border rounded-md p-2">
+    </div>
 
-                                <div class="mb-6">
-                                    <label class="block text-sm font-medium text-gray-700">Notas / Condiciones</label>
-                                    <textarea id="order-notes" rows="2" class="mt-1 block w-full border rounded-md p-2" placeholder="Ej. Pago a 30 días, entrega en almacén..."></textarea>
-                                </div>
+    <div class="mb-6">
+        <label for="order-notes" class="block text-sm font-medium text-gray-700">Notas / Condiciones</label>
+        <textarea id="order-notes" rows="2" class="mt-1 block w-full border rounded-md p-2" placeholder="Ej. Pago a 30 días, entrega en almacén..."></textarea>
+    </div>
 
-                                <div class="flex justify-end space-x-3">
-                                    <button type="button" id="btn-cancel-order" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md">Cancelar</button>
-                                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-md">Confirmar Orden</button>
-                                </div>
-                            </form>
+    <div class="flex justify-end space-x-3">
+        <button type="button" id="btn-cancel-order" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md">Cancelar</button>
+        <button type="submit" class="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-md">Confirmar Orden</button>
+    </div>
+</form>
                         </div>
                     </div>
 

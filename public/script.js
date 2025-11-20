@@ -768,12 +768,36 @@ document.addEventListener('DOMContentLoaded', () => {
         try { await authenticatedFetch('/.netlify/functions/guardar-datos', { method:'POST', body:JSON.stringify(payload)}); showToast('Enviado'); newRequestForm.reset(); appState.requests = await authenticatedFetch('/.netlify/functions/leer-datos', {method:'POST'}); renderUserRequestsTable(appState.requests); showView('dashboard-view'); } catch(e){ showToast(e.message, true); }
     });
 
-    if (newEntryForm) newEntryForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        // ... Lógica de entrada ...
-        const payload = { itemId: newEntryItemSelect.value, quantity: document.getElementById('entry-quantity').value, cost: document.getElementById('entry-cost').value, provider: document.getElementById('entry-provider').value, invoice: document.getElementById('entry-invoice').value, expirationDate: document.getElementById('entry-expiration').value, serialNumber: document.getElementById('entry-serial').value };
-        try { await authenticatedFetch('/.netlify/functions/registrar-entrada', { method:'POST', body:JSON.stringify(payload)}); showToast('Entrada registrada'); newEntryForm.reset(); } catch(e){ showToast(e.message, true); }
-    });
+    // --- INICIO MODIFICACIÓN FASE 2 ---
+    if (newPurchaseRequestForm) {
+        newPurchaseRequestForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const submitBtn = newPurchaseRequestForm.querySelector('button[type="submit"]');
+            const originalText = submitBtn.textContent;
+            submitBtn.disabled = true; submitBtn.textContent = "Enviando...";
+
+            const payload = {
+                itemName: document.getElementById('purchase-item-name').value,
+                quantity: document.getElementById('purchase-quantity').value,
+                justification: document.getElementById('purchase-justification').value,
+                especificaciones: document.getElementById('purchase-specifications').value
+            };
+
+            try {
+                await authenticatedFetch('/.netlify/functions/crear-solicitud-compra', {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                });
+                showToast('Solicitud de compra enviada correctamente.');
+                newPurchaseRequestForm.reset();
+            } catch (error) {
+                showToast(error.message, true);
+            } finally {
+                submitBtn.disabled = false; submitBtn.textContent = originalText;
+            }
+        });
+    }
+    // --- FIN MODIFICACIÓN FASE 2 ---
     
     // Purchase Order Form
     if (formOrder) {
