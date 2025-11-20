@@ -441,6 +441,69 @@ document.addEventListener('DOMContentLoaded', () => {
         setupSearchableDropdown('asset-search-input', 'asset-select', 'asset-search-results', assetData);
     };
 
+    // ==========================================
+    // FUNCIONES RECUPERADAS: REPORTES E INVENTARIO
+    // ==========================================
+
+    const loadReportsView = async () => {
+        const totalValueEl = document.getElementById('total-inventory-value');
+        const lowStockEl = document.getElementById('low-stock-items-container');
+        const expiringEl = document.getElementById('expiring-items-container');
+        
+        // Si el DOM de reportes no existe (estás en otra vista), salir
+        if (!totalValueEl || !lowStockEl || !expiringEl) return;
+
+        totalValueEl.textContent = 'Calculando...';
+        lowStockEl.innerHTML = '<p>Calculando...</p>';
+        expiringEl.innerHTML = '<p>Calculando...</p>';
+        
+        try {
+            const data = await authenticatedFetch('/.netlify/functions/generar-reporte', { method: 'POST' }); 
+            
+            totalValueEl.textContent = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(data.totalInventoryValue || 0);
+            
+            if (data.lowStockItems && data.lowStockItems.length > 0) {
+                const itemsList = data.lowStockItems.map(item => `<div class="flex justify-between items-center p-2 border-b"><span>${item.name}</span><span class="font-bold text-red-500">${item.stock} / ${item.minStock}</span></div>`).join('');
+                lowStockEl.innerHTML = itemsList;
+            } else {
+                lowStockEl.innerHTML = '<p class="text-gray-500">No hay insumos con stock bajo.</p>';
+            }
+
+            if (data.expiringItems && data.expiringItems.length > 0) {
+                const expiringList = data.expiringItems.map(item => 
+                    `<div class="flex justify-between items-center p-2 border-b">
+                        <span>${item.name} (Cant: ${item.quantity})</span>
+                        <span class="font-bold text-orange-500">Caduca: ${item.expirationDate}</span>
+                    </div>`
+                ).join('');
+                expiringEl.innerHTML = expiringList;
+            } else {
+                expiringEl.innerHTML = '<p class="text-gray-500">No hay insumos próximos a caducar.</p>';
+            }
+
+        } catch (error) {
+            showToast(error.message, true);
+            totalValueEl.textContent = 'Error';
+            lowStockEl.innerHTML = '<p class="text-red-500">No se pudo cargar el reporte.</p>';
+            expiringEl.innerHTML = '<p class="text-red-500">No se pudo cargar el reporte.</p>';
+        }
+    };
+
+    const renderFullInventory = async () => {
+        const container = document.getElementById('full-inventory-container');
+        if (!container) return;
+        container.innerHTML = '<p>Cargando inventario...</p>';
+
+        try {
+            const inventory = await authenticatedFetch('/.netlify/functions/leer-inventario-completo', { method: 'POST' });
+            appState.fullInventory = inventory;
+            appState.currentInventoryView = inventory;
+            renderInventoryTable(inventory);
+        } catch (error) {
+            container.innerHTML = `<p class="text-red-500">${error.message}</p>`;
+        }
+    };
+
     // --- TABLA DE SOLICITUDES (DASHBOARD) CON PESTAÑAS ---
     const renderUserRequestsTable = (requestsToRender) => {
         // Verificar contenedores de pestañas
