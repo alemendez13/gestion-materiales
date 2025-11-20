@@ -37,24 +37,22 @@ function calcularStockActual(insumoId, movimientos, solicitudes) {
     }
 
     // --- INICIO DE LA CORRECCIÓN (Falla M-1) ---
-    // 2. Ajustar el stock restando las SOLICITUDES APROBADAS
-    // Esto muestra el stock "realmente disponible" o "comprometido".
+    // 2. Ajustar el stock restando SOLO las SOLICITUDES PENDIENTES
+    // Las 'Aprobadas' ya generaron una salida en MOVIMIENTOS, no se deben restar de nuevo.
     if (solicitudes && solicitudes.length > 0) {
         for (const solicitud of solicitudes) {
-            // Se asume el formato de array de las funciones de la API
-            const solInsumoId = solicitud[3]; // D: item
-            const solCantidad = parseInt(solicitud[4]); // E: quantity
-            const solEstatus = solicitud[5]; // F: status
+            const solInsumoId = solicitud[3]; 
+            const solCantidad = parseInt(solicitud[4]); 
+            const solEstatus = solicitud[5]; 
 
-            // Restar si está aprobada (pero aún no se refleja en MOVIMIENTOS)
-            if (solInsumoId == insumoId && solEstatus === 'Aprobada') {
-                if (!isNaN(solCantidad)) {
-                    stock -= solCantidad; // Restar stock comprometido
+            // CORRECCIÓN: Solo restamos lo 'Pendiente' (Stock Comprometido)
+            if (solInsumoId == insumoId && solEstatus === 'Pendiente') {
+                 if (!isNaN(solCantidad)) {
+                    stock -= solCantidad; 
                 }
             }
         }
     }
-    // --- FIN DE LA CORRECCIÓN ---
 
     return stock;
 }
