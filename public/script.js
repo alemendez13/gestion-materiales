@@ -724,6 +724,37 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // ==========================================
+    // LISTENER FALTANTE: ACORDEÓN DE REPORTES
+    // ==========================================
+    if (mainContent) {
+        mainContent.addEventListener('click', (e) => {
+            // Detectar si el clic fue en el botón de desplegar (o en su ícono)
+            const toggleButton = e.target.closest('.report-toggle-btn');
+            
+            if (!toggleButton) return; // Si no fue en el botón, no hacer nada
+
+            e.preventDefault();
+            
+            // Identificar qué sección abrir (basado en el data-target del HTML)
+            const targetId = toggleButton.dataset.target;
+            const targetContent = document.getElementById(targetId);
+            const icon = toggleButton.querySelector('.toggle-icon');
+
+            if (!targetContent || !icon) return;
+
+            // Alternar la clase 'hidden' para mostrar/ocultar
+            targetContent.classList.toggle('hidden');
+
+            // Cambiar el ícono de la flecha (expand_more / expand_less)
+            if (targetContent.classList.contains('hidden')) {
+                icon.textContent = 'expand_more';
+            } else {
+                icon.textContent = 'expand_less';
+            }
+        });
+    }
+
     // Auth
     if (loginForm) loginForm.addEventListener('submit', handleLoginRequest);
     if (logoutButton) logoutButton.addEventListener('click', handleLogout);
