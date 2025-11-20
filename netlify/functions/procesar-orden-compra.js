@@ -16,100 +16,93 @@ const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: process.env.SMTP_PORT,
     secure: true,
-    auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-    },
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
 });
 
 exports.handler = withAuth(async (event) => {
     if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method Not Allowed' };
 
-    const userRole = event.auth.role;
+    const { pdfBase64, orderData, selectedRequests } = JSON.parse(event.body);
     const approverEmail = event.auth.email;
 
-    if (userRole !== 'admin' && userRole !== 'supervisor') {
-        return { statusCode: 403, body: JSON.stringify({ error: 'No autorizado.' }) };
-    }
+    if (!pdfBase64 || !orderData) return { statusCode: 400, body: 'Faltan datos.' };
 
     try {
-        const { 
-            pdfBase64, // El PDF generado en el frontend
-            orderData, // Datos generales de la orden (proveedor, fecha)
-            selectedRequests // Array de IDs de solicitudes de compra aprobadas (tipo SOLICITUD)
-        } = JSON.parse(event.body);
+        const auth = getAuth();
+        const sheets = google.sheets({ version: 'v4', auth });
+        const spreadsheetId = process.env.GOOGLE_SHEET_ID;
 
-        if (!pdfBase64 || !orderData) {
-            return { statusCode: 400, body: JSON.stringify({ error: 'Faltan datos de la orden.' }) };
-        }
+        // 1. Enviar Correo (Igual que antes)
+        await transporter.sendMail({
+            from: `"Sistema de Compras" <${process.env.SMTP_USER}>`,
+            to: [approverEmail, process.env.ADMIN_EMAIL, orderData.providerEmail].filter(Boolean), // Copia al proveedor si hay email
+            subject: `Orden de Compra Autorizada - ${orderData.providerName}`,
+            html: `<p>Adjunto encontrará la orden de compra autorizada.</p>
+                   <p><strong>Proveedor:</strong> ${orderData.providerName}</p>
+                   <p><strong>Total Estimado:</strong> $${orderData.totalCost}</p>`,
+            attachments: [{ filename: `OC_${Date.now()}.pdf`, content: pdfBase64, encoding: 'base64' }]
+        });
 
-        // 1. Enviar Correo al Autorizador (con PDF)
-        const mailOptions = {
-            from: `"Sistema de Inventarios" <${process.env.SMTP_USER}>`,
-            to: approverEmail, // Se envía a quien autorizó
-            cc: process.env.ADMIN_EMAIL, // Copia al admin general/compras
-            subject: `Orden de Compra Autorizada - ${orderData.provider || 'General'}`,
-            html: `
-                <h3>Orden de Compra Generada</h3>
-                <p><strong>Autorizado por:</strong> ${approverEmail}</p>
-                <p><strong>Proveedor:</strong> ${orderData.provider}</p>
-                <p><strong>Fecha de Entrega Estimada:</strong> ${orderData.deliveryDate}</p>
-                <p>Se adjunta el documento PDF oficial.</p>
-            `,
-            attachments: [
-                {
-                    filename: `Orden_Compra_${new Date().getTime()}.pdf`,
-                    content: pdfBase64,
-                    encoding: 'base64'
-                }
-            ]
-        };
-
-        await transporter.sendMail(mailOptions);
-
-        // 2. Actualizar Estatus en Google Sheets (Solo para las SOLICITUDES de usuarios)
+        // 2. Actualizar Solicitudes (Ahora con Proveedor y Costo)
         if (selectedRequests && selectedRequests.length > 0) {
-            const auth = getAuth();
-            const sheets = google.sheets({ version: 'v4', auth });
-            const spreadsheetId = process.env.GOOGLE_SHEET_ID;
-            const timestamp = new Date().toISOString();
-
-            // Esto es ineficiente si son muchas, pero funcional para volumen bajo.
-            // Idealmente usaríamos batchUpdate.
-            // Aquí asumimos que 'selectedRequests' trae { rowIndex, id, requesterEmail }
-            
-            // Recorremos las solicitudes aprobadas
             for (const req of selectedRequests) {
                 if (req.type === 'SOLICITUD' && req.rowIndex) {
-                    // Actualizar columna H (Estatus) a 'En Proceso' o 'Comprado'
+                    // Actualizamos columnas H, I, J, K (Estatus, Proveedor, Costo, Fecha)
                     await sheets.spreadsheets.values.update({
                         spreadsheetId,
-                        range: `SOLICITUDES_COMPRA!H${req.rowIndex}`,
+                        range: `SOLICITUDES_COMPRA!H${req.rowIndex}:K${req.rowIndex}`,
                         valueInputOption: 'USER_ENTERED',
-                        resource: { values: [['En Proceso']] }
+                        resource: { 
+                            values: [[
+                                'En Proceso', 
+                                orderData.providerName, 
+                                orderData.totalCost, // O costo unitario si lo tuvieras desglosado
+                                orderData.deliveryDate
+                            ]] 
+                        }
                     });
-
-                    // Enviar notificación al solicitante original
-                    try {
-                        await transporter.sendMail({
-                            from: `"Sistema de Inventarios" <${process.env.SMTP_USER}>`,
-                            to: req.requester,
-                            subject: `Tu solicitud de compra ha sido aprobada`,
-                            html: `<p>Hola,</p>
-                                   <p>Tu solicitud para comprar <strong>${req.name}</strong> ha sido autorizada e incluida en una orden de compra.</p>
-                                   <p>Estatus: <strong>En Proceso</strong></p>`
-                        });
-                    } catch (emailErr) {
-                        console.warn(`No se pudo enviar correo a ${req.requester}`);
-                    }
                 }
             }
         }
 
-        return { statusCode: 200, body: JSON.stringify({ message: 'Orden procesada y correos enviados.' }) };
+        // 3. INTELIGENCIA DE NEGOCIO: Actualizar el Historial de Precios del Proveedor
+        // Si seleccionamos un proveedor del catálogo, actualizamos sus precios.
+        if (orderData.providerId) {
+            // a. Buscar la fila del proveedor
+            const provRes = await sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: 'CATALOGO_PROVEEDORES!A:H'
+            });
+            const rows = provRes.data.values || [];
+            const rowIndex = rows.findIndex(r => r[0] === orderData.providerId);
+
+            if (rowIndex !== -1) {
+                // b. Leer historial actual
+                let history = {};
+                try { history = JSON.parse(rows[rowIndex][7] || '{}'); } catch (e) {}
+
+                // c. Agregar nuevos items (Solo guardamos el último precio)
+                // Asumimos que 'selectedRequests' tiene nombres de productos
+                selectedRequests.forEach(req => {
+                    history[req.name] = {
+                        cost: orderData.totalCost, // Nota: Esto es un aprox si la orden tiene varios items.
+                        date: new Date().toISOString().split('T')[0]
+                    };
+                });
+
+                // d. Guardar JSON actualizado en Columna H
+                await sheets.spreadsheets.values.update({
+                    spreadsheetId,
+                    range: `CATALOGO_PROVEEDORES!H${rowIndex + 1}`,
+                    valueInputOption: 'USER_ENTERED',
+                    resource: { values: [[JSON.stringify(history)]] }
+                });
+            }
+        }
+
+        return { statusCode: 200, body: JSON.stringify({ message: 'Orden procesada.' }) };
 
     } catch (error) {
-        console.error("Error procesando orden:", error);
         return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
     }
 });
