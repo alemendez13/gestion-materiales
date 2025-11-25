@@ -1001,5 +1001,165 @@ document.addEventListener('DOMContentLoaded', () => {
     if(selAllStock) selAllStock.addEventListener('change', (e) => { document.querySelectorAll('.purchase-checkbox[data-type="stock"]').forEach(cb => { cb.checked = e.target.checked; cb.dispatchEvent(new Event('change')); }); });
     if(selAllReqs) selAllReqs.addEventListener('change', (e) => { document.querySelectorAll('.purchase-checkbox[data-type="request"]').forEach(cb => { cb.checked = e.target.checked; cb.dispatchEvent(new Event('change')); }); });
 
+    // =========================================================
+    // NUEVO CÓDIGO: GENERADOR DE RESPONSIVA CON LEYENDA LEGAL
+    // =========================================================
+
+    const generateResponsivaPDF = async (assetData) => {
+        // Carga la librería que ya usas en el proyecto
+        const PDFLib = await loadPdfLib();
+        if (!PDFLib) throw new Error('Error: La librería PDF no cargó correctamente.');
+        const { PDFDocument, rgb, StandardFonts } = PDFLib;
+
+        // Crear documento nuevo
+        const pdfDoc = await PDFDocument.create();
+        const page = pdfDoc.addPage();
+        const { width, height } = page.getSize();
+        
+        // Fuentes
+        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+        const fontSize = 10;
+        let yPos = height - 50;
+
+        // --- 1. ENCABEZADO Y LOGO ---
+        try {
+            // Intenta cargar logo.png si está disponible en la raíz
+            const logoBytes = await fetch('logo.png').then(res => res.arrayBuffer());
+            const logoImage = await pdfDoc.embedPng(logoBytes);
+            const logoDims = logoImage.scale(0.15);
+            page.drawImage(logoImage, { x: 50, y: yPos - logoDims.height, width: logoDims.width, height: logoDims.height });
+            yPos -= (logoDims.height + 20);
+        } catch (e) {
+            // Fallback si no hay imagen
+            page.drawText('SANSCE', { x: 50, y: yPos, size: 18, font: fontBold });
+            yPos -= 30;
+        }
+
+        page.drawText('Responsiva de Activo Fijo', { x: 50, y: yPos, size: 16, font: fontBold, color: rgb(0.2, 0.4, 0.6) });
+        yPos -= 40;
+
+        // --- 2. DATOS DEL ACTIVO ---
+        const drawField = (label, value, y) => {
+            page.drawText(label, { x: 50, y: y, size: fontSize, font: fontBold });
+            // Limpieza básica de texto para evitar errores en PDF
+            const cleanValue = String(value || 'N/A').replace(/\n/g, ' '); 
+            page.drawText(cleanValue, { x: 200, y: y, size: fontSize, font });
+        };
+
+        drawField('Fecha de Emisión:', new Date().toLocaleDateString(), yPos); yPos -= 20;
+        drawField('ID del Activo:', assetData.assetId, yPos); yPos -= 20;
+        drawField('Nombre / Modelo:', assetData.assetName, yPos); yPos -= 20;
+        drawField('Responsable:', assetData.responsibleName, yPos); yPos -= 20;
+        drawField('Email:', assetData.responsibleEmail, yPos); yPos -= 20;
+
+        yPos -= 10;
+        page.drawText('Condiciones de Entrega:', { x: 50, y: yPos, size: fontSize, font: fontBold });
+        yPos -= 15;
+        
+        const conditions = assetData.conditions || 'El equipo se entrega nuevo y verificado.';
+        page.drawText(conditions, { x: 50, y: yPos, size: 9, font, color: rgb(0.3, 0.3, 0.3), maxWidth: 500 });
+        
+        yPos -= 60;
+
+        // --- 3. NUEVA LEYENDA LEGAL (CLÁUSULA DE RESPONSABILIDAD) ---
+        // Dibujamos un recuadro gris claro para resaltar la importancia
+        page.drawRectangle({
+            x: 40, y: yPos - 55, width: width - 80, height: 70,
+            borderColor: rgb(0.7, 0.7, 0.7), borderWidth: 1, color: rgb(0.96, 0.96, 0.96)
+        });
+        
+        const legalY = yPos - 10;
+        page.drawText('CLÁUSULA DE RESPONSABILIDAD Y CUSTODIA', { x: 50, y: legalY, size: 9, font: fontBold });
+        
+        // Texto dividido en líneas manualmente para asegurar que cabe
+        const line1 = 'El resguardante asume la responsabilidad total sobre la custodia del activo descrito. Se compromete a';
+        const line2 = 'cubrir los costos de reparación o reposición en caso de daño, pérdida o desperfecto derivado de';
+        const line3 = 'negligencia, mal uso o falta de precaución, excluyendo el desgaste natural por el uso ordinario.';
+
+        page.drawText(line1, { x: 50, y: legalY - 15, size: 8, font });
+        page.drawText(line2, { x: 50, y: legalY - 25, size: 8, font });
+        page.drawText(line3, { x: 50, y: legalY - 35, size: 8, font });
+
+        yPos -= 150; // Espacio para firmar
+
+        // --- 4. ÁREA DE FIRMAS ---
+        const firmY = yPos;
+        // Línea izquierda
+        page.drawLine({ start: { x: 50, y: firmY }, end: { x: 230, y: firmY }, thickness: 1 });
+        // Línea derecha
+        page.drawLine({ start: { x: 300, y: firmY }, end: { x: 480, y: firmY }, thickness: 1 });
+
+        page.drawText('Firma del Colaborador (Recibe)', { x: 50, y: firmY - 15, size: 9, font });
+        page.drawText('Firma de Administración (Entrega)', { x: 300, y: firmY - 15, size: 9, font });
+
+        // Guardar y Descargar automáticamente
+        const pdfBytes = await pdfDoc.save();
+        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `Responsiva_${assetData.assetId}_${Date.now()}.pdf`;
+        link.click();
+    };
+
+    // --- CONEXIÓN CON EL FORMULARIO ---
+    // Usamos la variable 'newAssetForm' que ya declaraste al inicio de script.js
+    if (newAssetForm) {
+        newAssetForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            // Elementos del DOM
+            const submitBtn = newAssetForm.querySelector('button[type="submit"]');
+            const originalText = submitBtn.textContent;
+            
+            // Recolección de datos
+            const assetSelectEl = document.getElementById('asset-select');
+            const assetNameEl = document.getElementById('asset-search-input');
+            const respNameEl = document.getElementById('responsible-name');
+            const respEmailEl = document.getElementById('responsible-email');
+            const condEl = document.getElementById('asset-conditions');
+
+            if (!assetSelectEl.value) {
+                showToast('Error: Debes seleccionar un activo válido del buscador.', true);
+                return;
+            }
+
+            // Bloquear botón
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Procesando...';
+
+            const assetPayload = {
+                assetId: assetSelectEl.value, 
+                assetName: assetNameEl.value, 
+                responsibleName: respNameEl.value,
+                responsibleEmail: respEmailEl.value,
+                conditions: condEl.value
+            };
+
+            try {
+                // 1. Backend: Guardar registro en Google Sheets
+                // Usa tu función existente 'generar-responsiva.js'
+                await authenticatedFetch('/.netlify/functions/generar-responsiva', {
+                    method: 'POST',
+                    body: JSON.stringify(assetPayload)
+                });
+
+                // 2. Frontend: Generar y descargar PDF
+                await generateResponsivaPDF(assetPayload);
+
+                showToast('Responsiva guardada y descargada con éxito.');
+                newAssetForm.reset();
+                
+            } catch (error) {
+                console.error(error);
+                showToast('Hubo un problema: ' + error.message, true);
+            } finally {
+                // Restaurar botón
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+            }
+        });
+    }
+
     bootstrapApp();
 });
