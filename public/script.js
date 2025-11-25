@@ -1002,9 +1002,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if(selAllReqs) selAllReqs.addEventListener('change', (e) => { document.querySelectorAll('.purchase-checkbox[data-type="request"]').forEach(cb => { cb.checked = e.target.checked; cb.dispatchEvent(new Event('change')); }); });
 
     // =========================================================
-    // NUEVO CÓDIGO: GENERADOR DE RESPONSIVA CON LEYENDA LEGAL
+    // 8. GENERADOR DE RESPONSIVA (PDF + LEYENDA LEGAL)
     // =========================================================
 
+    // Validamos que no se haya declarado antes para evitar conflictos
     const generateResponsivaPDF = async (assetData) => {
         // Carga la librería que ya usas en el proyecto
         const PDFLib = await loadPdfLib();
@@ -1024,14 +1025,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // --- 1. ENCABEZADO Y LOGO ---
         try {
-            // Intenta cargar logo.png si está disponible en la raíz
             const logoBytes = await fetch('logo.png').then(res => res.arrayBuffer());
             const logoImage = await pdfDoc.embedPng(logoBytes);
             const logoDims = logoImage.scale(0.15);
             page.drawImage(logoImage, { x: 50, y: yPos - logoDims.height, width: logoDims.width, height: logoDims.height });
             yPos -= (logoDims.height + 20);
         } catch (e) {
-            // Fallback si no hay imagen
             page.drawText('SANSCE', { x: 50, y: yPos, size: 18, font: fontBold });
             yPos -= 30;
         }
@@ -1042,7 +1041,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- 2. DATOS DEL ACTIVO ---
         const drawField = (label, value, y) => {
             page.drawText(label, { x: 50, y: y, size: fontSize, font: fontBold });
-            // Limpieza básica de texto para evitar errores en PDF
             const cleanValue = String(value || 'N/A').replace(/\n/g, ' '); 
             page.drawText(cleanValue, { x: 200, y: y, size: fontSize, font });
         };
@@ -1062,8 +1060,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         yPos -= 60;
 
-        // --- 3. NUEVA LEYENDA LEGAL (CLÁUSULA DE RESPONSABILIDAD) ---
-        // Dibujamos un recuadro gris claro para resaltar la importancia
+        // --- 3. CLÁUSULA DE RESPONSABILIDAD (LEYENDA LEGAL) ---
         page.drawRectangle({
             x: 40, y: yPos - 55, width: width - 80, height: 70,
             borderColor: rgb(0.7, 0.7, 0.7), borderWidth: 1, color: rgb(0.96, 0.96, 0.96)
@@ -1072,7 +1069,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const legalY = yPos - 10;
         page.drawText('CLÁUSULA DE RESPONSABILIDAD Y CUSTODIA', { x: 50, y: legalY, size: 9, font: fontBold });
         
-        // Texto dividido en líneas manualmente para asegurar que cabe
         const line1 = 'El resguardante asume la responsabilidad total sobre la custodia del activo descrito. Se compromete a';
         const line2 = 'cubrir los costos de reparación o reposición en caso de daño, pérdida o desperfecto derivado de';
         const line3 = 'negligencia, mal uso o falta de precaución, excluyendo el desgaste natural por el uso ordinario.';
@@ -1081,19 +1077,17 @@ document.addEventListener('DOMContentLoaded', () => {
         page.drawText(line2, { x: 50, y: legalY - 25, size: 8, font });
         page.drawText(line3, { x: 50, y: legalY - 35, size: 8, font });
 
-        yPos -= 150; // Espacio para firmar
+        yPos -= 150; // Espacio para firmas
 
         // --- 4. ÁREA DE FIRMAS ---
         const firmY = yPos;
-        // Línea izquierda
         page.drawLine({ start: { x: 50, y: firmY }, end: { x: 230, y: firmY }, thickness: 1 });
-        // Línea derecha
         page.drawLine({ start: { x: 300, y: firmY }, end: { x: 480, y: firmY }, thickness: 1 });
 
         page.drawText('Firma del Colaborador (Recibe)', { x: 50, y: firmY - 15, size: 9, font });
         page.drawText('Firma de Administración (Entrega)', { x: 300, y: firmY - 15, size: 9, font });
 
-        // Guardar y Descargar automáticamente
+        // Guardar y Descargar
         const pdfBytes = await pdfDoc.save();
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
         const link = document.createElement('a');
@@ -1103,16 +1097,14 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- CONEXIÓN CON EL FORMULARIO ---
-    // Usamos la variable 'newAssetForm' que ya declaraste al inicio de script.js
     if (newAssetForm) {
-        newAssetForm.addEventListener('submit', async (e) => {
+        // Importante: removemos listeners previos si existen para evitar doble envío (aunque al recargar página se limpia)
+        const newAssetHandler = async (e) => {
             e.preventDefault();
             
-            // Elementos del DOM
             const submitBtn = newAssetForm.querySelector('button[type="submit"]');
             const originalText = submitBtn.textContent;
             
-            // Recolección de datos
             const assetSelectEl = document.getElementById('asset-select');
             const assetNameEl = document.getElementById('asset-search-input');
             const respNameEl = document.getElementById('responsible-name');
@@ -1124,7 +1116,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // Bloquear botón
             submitBtn.disabled = true;
             submitBtn.textContent = 'Procesando...';
 
@@ -1137,14 +1128,13 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             try {
-                // 1. Backend: Guardar registro en Google Sheets
-                // Usa tu función existente 'generar-responsiva.js'
+                // 1. Guardar en Backend
                 await authenticatedFetch('/.netlify/functions/generar-responsiva', {
                     method: 'POST',
                     body: JSON.stringify(assetPayload)
                 });
 
-                // 2. Frontend: Generar y descargar PDF
+                // 2. Generar PDF
                 await generateResponsivaPDF(assetPayload);
 
                 showToast('Responsiva guardada y descargada con éxito.');
@@ -1154,11 +1144,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.error(error);
                 showToast('Hubo un problema: ' + error.message, true);
             } finally {
-                // Restaurar botón
                 submitBtn.disabled = false;
                 submitBtn.textContent = originalText;
             }
-        });
+        };
+
+        // Usamos onsubmit directo o addEventListener. 
+        newAssetForm.onsubmit = newAssetHandler; 
     }
 
     bootstrapApp();
