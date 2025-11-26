@@ -1056,36 +1056,79 @@ document.addEventListener('DOMContentLoaded', () => {
         yPos -= 15;
         
         const conditions = assetData.conditions || 'El equipo se entrega nuevo y verificado.';
-        page.drawText(conditions, { x: 50, y: yPos, size: 9, font, color: rgb(0.3, 0.3, 0.3), maxWidth: 500 });
         
+        // --- MODIFICACIÓN: CONTROL DE MÁRGENES ---
+        // Ancho de página - 100 (50 margen izq + 50 margen der)
+        // Esto asegura que el texto termine exactamente donde termina el cuadro gris
+        const textWidth = width - 100; 
+        
+        page.drawText(conditions, { 
+            x: 50, 
+            y: yPos, 
+            size: 9, 
+            font: font, 
+            color: rgb(0.3, 0.3, 0.3), 
+            maxWidth: textWidth, // Esto fuerza el respeto al margen derecho
+            lineHeight: 12       // Espaciado entre líneas para mejor lectura
+        });
+        
+        // Bajamos el cursor lo suficiente para que el cuadro gris no tape el texto
+        // (Estimación segura: 60 puntos, ajusta si escriben testamentos)
         yPos -= 60;
 
         // --- 3. CLÁUSULA DE RESPONSABILIDAD (LEYENDA LEGAL) ---
+        // Dibujamos el recuadro
         page.drawRectangle({
             x: 40, y: yPos - 55, width: width - 80, height: 70,
             borderColor: rgb(0.7, 0.7, 0.7), borderWidth: 1, color: rgb(0.96, 0.96, 0.96)
         });
         
         const legalY = yPos - 10;
+        
+        // Título centrado ópticamente
         page.drawText('CLÁUSULA DE RESPONSABILIDAD Y CUSTODIA', { x: 50, y: legalY, size: 9, font: fontBold });
         
+        // Texto ajustado manualmente para simular bloque justificado
+        // Se han redistribuido las palabras para que las líneas tengan un largo similar
         const line1 = 'El resguardante asume la responsabilidad total sobre la custodia del activo descrito. Se compromete a';
         const line2 = 'cubrir los costos de reparación o reposición en caso de daño, pérdida o desperfecto derivado de';
         const line3 = 'negligencia, mal uso o falta de precaución, excluyendo el desgaste natural por el uso ordinario.';
 
-        page.drawText(line1, { x: 50, y: legalY - 15, size: 8, font });
-        page.drawText(line2, { x: 50, y: legalY - 25, size: 8, font });
-        page.drawText(line3, { x: 50, y: legalY - 35, size: 8, font });
+        // x: 50 asegura un margen izquierdo alineado con el título
+        page.drawText(line1, { x: 50, y: legalY - 18, size: 8, font });
+        page.drawText(line2, { x: 50, y: legalY - 28, size: 8, font });
+        page.drawText(line3, { x: 50, y: legalY - 38, size: 8, font });
 
         yPos -= 150; // Espacio para firmas
 
         // --- 4. ÁREA DE FIRMAS ---
         const firmY = yPos;
-        page.drawLine({ start: { x: 50, y: firmY }, end: { x: 230, y: firmY }, thickness: 1 });
-        page.drawLine({ start: { x: 300, y: firmY }, end: { x: 480, y: firmY }, thickness: 1 });
+        
+        // Definimos coordenadas de las líneas (Inicio y Fin)
+        const l1Start = 50, l1End = 230;
+        const l2Start = 300, l2End = 480;
 
-        page.drawText('Firma del Colaborador (Recibe)', { x: 50, y: firmY - 15, size: 9, font });
-        page.drawText('Firma de Administración (Entrega)', { x: 300, y: firmY - 15, size: 9, font });
+        // Dibujamos las líneas
+        page.drawLine({ start: { x: l1Start, y: firmY }, end: { x: l1End, y: firmY }, thickness: 1 });
+        page.drawLine({ start: { x: l2Start, y: firmY }, end: { x: l2End, y: firmY }, thickness: 1 });
+
+        // Textos
+        const txtFirma1 = 'Firma del Colaborador (Recibe)';
+        const txtFirma2 = 'Firma de Administración (Entrega)';
+        const txtSize = 9;
+
+        // CÁLCULO DE CENTRADO:
+        // 1. Obtenemos el ancho exacto del texto usando la fuente actual
+        const width1 = font.widthOfTextAtSize(txtFirma1, txtSize);
+        const width2 = font.widthOfTextAtSize(txtFirma2, txtSize);
+
+        // 2. Calculamos la posición X: (Centro de la línea) - (Mitad del texto)
+        const xFirma1 = ((l1Start + l1End) / 2) - (width1 / 2);
+        const xFirma2 = ((l2Start + l2End) / 2) - (width2 / 2);
+
+        // Dibujamos los textos centrados
+        page.drawText(txtFirma1, { x: xFirma1, y: firmY - 15, size: txtSize, font });
+        page.drawText(txtFirma2, { x: xFirma2, y: firmY - 15, size: txtSize, font });
 
         // Guardar y Descargar
         const pdfBytes = await pdfDoc.save();
