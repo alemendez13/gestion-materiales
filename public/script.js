@@ -1196,5 +1196,175 @@ document.addEventListener('DOMContentLoaded', () => {
         newAssetForm.onsubmit = newAssetHandler; 
     }
 
+    // =========================================================
+    // 9. REPARACIÓN DE EVENT LISTENERS FALTANTES (CATÁLOGO Y REPORTES)
+    // =========================================================
+
+    // --- A. AÑADIR NUEVO INSUMO AL CATÁLOGO ---
+    if (newCatalogForm) {
+        newCatalogForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const submitBtn = newCatalogForm.querySelector('button[type="submit"]');
+            const originalText = submitBtn.textContent;
+            
+            // Recolección de datos
+            const payload = {
+                name: document.getElementById('item-name-input').value,
+                sku: document.getElementById('item-sku-input').value,
+                family: document.getElementById('item-family-input').value,
+                unit: document.getElementById('item-unit-input').value,
+                description: document.getElementById('item-desc-input').value,
+                minStock: document.getElementById('item-min-stock-input').value,
+                serialNumber: document.getElementById('item-serial-input').value,
+                isAsset: document.getElementById('item-is-asset-input').checked // Checkbox
+            };
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Guardando...';
+
+            try {
+                // Llamada al Backend
+                await authenticatedFetch('/.netlify/functions/crear-insumo', {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                });
+
+                showToast('Insumo añadido al catálogo correctamente.');
+                newCatalogForm.reset();
+                
+                // Recargar catálogo en memoria para que aparezca en los buscadores inmediatamente
+                appState.catalog = await authenticatedFetch('/.netlify/functions/leer-catalogo', { method: 'POST' });
+                populateCatalogDropdowns(); // Actualizar desplegables
+                
+            } catch (error) {
+                console.error(error);
+                showToast('Error: ' + error.message, true);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+            }
+        });
+    }
+
+    // --- B. FILTRO DE INVENTARIO GENERAL ---
+    const inventorySearchInput = document.getElementById('inventory-search-input');
+    if (inventorySearchInput) {
+        inventorySearchInput.addEventListener('input', (e) => {
+            const term = e.target.value.toLowerCase();
+            
+            if (!appState.fullInventory) return;
+
+            // Filtrar sobre el inventario completo cargado en memoria
+            const filtered = appState.fullInventory.filter(item => 
+                (item.name && item.name.toLowerCase().includes(term)) ||
+                (item.sku && item.sku.toLowerCase().includes(term)) ||
+                (item.family && item.family.toLowerCase().includes(term)) ||
+                (item.location && item.location.toLowerCase().includes(term))
+            );
+
+            // Actualizar la vista actual y renderizar
+            appState.currentInventoryView = filtered;
+            renderInventoryTable(filtered);
+        });
+    }
+
+    // --- C. EXPORTAR INVENTARIO A CSV ---
+    if (exportInventoryCsvBtn) {
+        exportInventoryCsvBtn.addEventListener('click', async () => {
+            // Asegurar que PapaParse esté cargado
+            const Papa = await loadPapaParse();
+            if (!Papa) {
+                showToast('Error al cargar librería CSV.', true);
+                return;
+            }
+
+            const dataToExport = appState.currentInventoryView || appState.fullInventory;
+            if (!dataToExport || dataToExport.length === 0) {
+                showToast('No hay datos para exportar.', true);
+                return;
+            }
+
+            // Convertir JSON a CSV
+            const csv = Papa.unparse(dataToExport);
+            
+            // Crear Blob y descargar
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", `Inventario_SANSCE_${new Date().toISOString().split('T')[0]}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+    }
+
+    // --- D. EXPORTAR ACTIVOS FIJOS (Backend) ---
+    if (exportAssetsBtn) {
+        exportAssetsBtn.addEventListener('click', async () => {
+            const originalText = exportAssetsBtn.textContent;
+            exportAssetsBtn.disabled = true;
+            exportAssetsBtn.textContent = 'Exportando...';
+            
+            try {
+                const res = await authenticatedFetch('/.netlify/functions/exportar-activos', { method: 'POST' });
+                showToast(res.message || 'Exportación completada en Google Sheets.');
+            } catch (error) {
+                showToast(error.message, true);
+            } finally {
+                exportAssetsBtn.disabled = false;
+                exportAssetsBtn.textContent = originalText;
+            }
+        });
+    }
+
+    // --- E. IMPORTACIÓN MASIVA (CSV) ---
+    if (bulkImportForm) {
+        bulkImportForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const Papa = await loadPapaParse();
+            const fileInput = document.getElementById('csv-file-input');
+            const file = fileInput.files[0];
+            const btn = document.getElementById('bulk-import-button');
+            const loader = document.getElementById('bulk-import-loader');
+            const resultsDiv = document.getElementById('bulk-import-results');
+
+            if (!file) return;
+
+            btn.disabled = true;
+            loader.classList.remove('hidden');
+            resultsDiv.innerHTML = 'Procesando archivo...';
+
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                complete: async function(results) {
+                    const rows = results.data;
+                    // Enviamos todo el bloque al backend (función bulk-import-stock que debes tener creada o crear)
+                    // Nota: Si no tienes 'bulk-import-stock.js', esto fallará. 
+                    // Asumiremos que procesamos uno a uno o que existe el endpoint.
+                    // Para ser seguros con tu arquitectura actual, vamos a iterar aquí o enviar al endpoint si existe.
+                    
+                    try {
+                         // Intentamos enviar al endpoint masivo
+                        const response = await authenticatedFetch('/.netlify/functions/bulk-import-stock', {
+                            method: 'POST',
+                            body: JSON.stringify({ rows })
+                        });
+                        resultsDiv.innerHTML = `<p class="text-green-600">${response.message}</p>`;
+                        showToast('Importación finalizada.');
+                        bulkImportForm.reset();
+                    } catch (err) {
+                        resultsDiv.innerHTML = `<p class="text-red-600">Error: ${err.message}</p>`;
+                    } finally {
+                        btn.disabled = false;
+                        loader.classList.add('hidden');
+                    }
+                }
+            });
+        });
+    }
+
     bootstrapApp();
 });
