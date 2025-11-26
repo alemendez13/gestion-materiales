@@ -1319,6 +1319,70 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // --- F. REGISTRO DE ENTRADA DE MERCANCÍA (Corrección Faltante) ---
+    if (newEntryForm) {
+        newEntryForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const submitBtn = newEntryForm.querySelector('button[type="submit"]');
+            const originalText = submitBtn.textContent;
+            
+            // Elementos del DOM
+            const itemSelect = document.getElementById('entry-item-select'); // ID Oculto
+            const quantityInput = document.getElementById('entry-quantity');
+            const costInput = document.getElementById('entry-cost');
+            const providerInput = document.getElementById('entry-provider');
+            const invoiceInput = document.getElementById('entry-invoice');
+            const expirationInput = document.getElementById('entry-expiration');
+            const serialInput = document.getElementById('entry-serial');
+
+            // Validación básica
+            if (!itemSelect.value) {
+                showToast('Error: Debes seleccionar un insumo válido del buscador.', true);
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Registrando...';
+
+            const payload = {
+                itemId: itemSelect.value,
+                quantity: quantityInput.value,
+                cost: costInput.value,
+                provider: providerInput.value,
+                invoice: invoiceInput.value,
+                expirationDate: expirationInput.value, // Puede estar vacío si no aplica
+                serialNumber: serialInput.value
+            };
+
+            try {
+                // Llamada al Backend
+                await authenticatedFetch('/.netlify/functions/registrar-entrada', {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                });
+
+                showToast('Entrada de mercancía registrada exitosamente.');
+                newEntryForm.reset();
+                
+                // Limpiar descripción auxiliar del buscador
+                const descEl = document.getElementById('entry-item-description');
+                if (descEl) descEl.textContent = 'Seleccione un insumo...';
+
+                // Recargar inventario para reflejar el cambio en tiempo real
+                if (appState.currentInventoryView) {
+                    renderFullInventory(); 
+                }
+
+            } catch (error) {
+                console.error(error);
+                showToast('Error: ' + error.message, true);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+            }
+        });
+    }
+
     // --- E. IMPORTACIÓN MASIVA (CSV) ---
     if (bulkImportForm) {
         bulkImportForm.addEventListener('submit', async (e) => {
