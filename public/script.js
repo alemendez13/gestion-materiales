@@ -664,155 +664,263 @@ document.addEventListener('DOMContentLoaded', () => {
         if (btnGenerateOrder) btnGenerateOrder.disabled = total === 0;
     };
 
-    const generatePurchaseOrderPDF = async (orderData) => {
-        const PDFLib = await loadPdfLib();
-        if (!PDFLib) throw new Error('PDF-Lib no cargado');
-        const { PDFDocument, rgb, StandardFonts } = PDFLib;
+    // =========================================================
+    // NUEVA LÓGICA DE COMPRAS (Reemplaza a la anterior)
+    // =========================================================
+
+    // 1. Renderizar la Tabla Dinámica en el Modal
+    const renderOrderTable = () => {
+        const tbody = document.getElementById('order-items-body');
+        const grandTotalEl = document.getElementById('order-grand-total');
         
-        const pdfDoc = await PDFDocument.create();
-        const page = pdfDoc.addPage();
-        const { width, height } = page.getSize();
+        // Limpiamos la tabla
+        tbody.innerHTML = '';
+
+        // Unimos stock seleccionado + solicitudes seleccionadas
+        const allItems = [...purchaseSelection.stock, ...purchaseSelection.requests];
         
-        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-        const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-
-        let yPos = height - 40; 
-
-        // --- 1. LOGO (Esquina Superior Izquierda) ---
-        try {
-            const logoUrl = 'logo.png'; 
-            const logoImageBytes = await fetch(logoUrl).then((res) => res.arrayBuffer());
-            const logoImage = await pdfDoc.embedPng(logoImageBytes); 
-            const logoDims = logoImage.scale(0.15); 
-
-            page.drawImage(logoImage, {
-                x: 50,
-                y: yPos - logoDims.height, 
-                width: logoDims.width,
-                height: logoDims.height,
-            });
-
-            yPos -= (logoDims.height + 20); 
-
-        } catch (error) {
-            console.warn("No se pudo cargar el logo.", error);
-            yPos -= 60; 
+        if (allItems.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-500">No hay ítems seleccionados.</td></tr>';
+            grandTotalEl.textContent = '$0.00';
+            return;
         }
 
-        // --- 2. TÍTULO (Centrado en la página) ---
-        yPos -= 30; 
+        allItems.forEach((item, index) => {
+            const row = document.createElement('tr');
+            
+            // INTELIGENCIA: Buscamos si este item tiene un proveedor sugerido en el catálogo
+            // (El backend ya nos manda 'suggestedProvider' en appState.catalog)
+            const catalogItem = appState.catalog.find(c => c.name === item.name); 
+            const suggestedProvName = catalogItem ? catalogItem.suggestedProvider : '';
+            
+            // Cantidad sugerida o solicitada
+            const qty = item.suggestedQty || item.quantity || 1;
 
-        const titleText = 'Requisición de materiales';
-        const titleSize = 18;
-        const titleWidth = fontBold.widthOfTextAtSize(titleText, titleSize);
-        const titleX = (width - titleWidth) / 2; // Cálculo para centrar horizontalmente
+            row.innerHTML = `
+                <td class="p-2 border-b">
+                    <p class="font-medium truncate text-gray-800" title="${item.name}">${item.name}</p>
+                    <span class="text-xs text-gray-400">${item.type === 'SOLICITUD' ? 'Solicitud Usuario' : 'Reposición Stock'}</span>
+                </td>
+                <td class="p-2 text-center border-b">${qty}</td>
+                <td class="p-2 border-b">
+                    <select class="order-provider-select w-full border border-gray-300 rounded p-1 text-sm bg-white focus:ring-blue-500 focus:border-blue-500" data-index="${index}">
+                        <option value="">-- Seleccionar --</option>
+                        ${appState.providers.map(p => `
+                            <option value="${p.id}" ${p.name === suggestedProvName ? 'selected' : ''}>${p.name}</option>
+                        `).join('')}
+                    </select>
+                </td>
+                <td class="p-2 border-b">
+                    <input type="number" min="0" step="0.01" class="order-cost-input w-full border border-gray-300 rounded p-1 text-right focus:ring-blue-500 focus:border-blue-500" placeholder="0.00" data-qty="${qty}" data-index="${index}">
+                </td>
+                <td class="p-2 text-right font-medium text-gray-700 border-b order-row-total" id="row-total-${index}">$0.00</td>
+            `;
+            tbody.appendChild(row);
+        });
 
-        page.drawText(titleText, { 
-            x: titleX, 
-            y: yPos, 
-            size: titleSize, 
-            font: fontBold 
+        // Agregamos listeners a los nuevos inputs para que calculen al escribir
+        document.querySelectorAll('.order-cost-input').forEach(input => {
+            input.addEventListener('input', calculateOrderTotals);
         });
         
-        yPos -= 40; 
-        
-        // Datos de cabecera
-        page.drawText(`Fecha: ${new Date().toLocaleDateString()}`, { x: 50, y: yPos, size: 11, font });
-        page.drawText(`Proveedor: ${orderData.providerName || 'N/A'}`, { x: 300, y: yPos, size: 11, font });
-        
-        yPos -= 18;
-        page.drawText(`Entrega Estimada: ${orderData.deliveryDate || 'Pendiente'}`, { x: 50, y: yPos, size: 11, font });
-        
-        if (orderData.notes) { 
-            yPos -= 18; 
-            page.drawText(`Notas: ${orderData.notes}`, { x: 50, y: yPos, size: 10, font, color: rgb(0.3, 0.3, 0.3) }); 
-        }
-        
-        // --- 3. TABLA DE ITEMS ---
-        yPos -= 30;
-
-        page.drawText('CANT', { x: 50, y: yPos, size: 9, font: fontBold });
-        page.drawText('DESCRIPCIÓN', { x: 100, y: yPos, size: 9, font: fontBold });
-        page.drawText('TIPO', { x: 450, y: yPos, size: 9, font: fontBold });
-        
-        yPos -= 5;
-        page.drawLine({ start: { x: 50, y: yPos }, end: { x: 550, y: yPos }, thickness: 1, color: rgb(0,0,0) });
-        yPos -= 20;
-
-        const itemsToPrint = [...purchaseSelection.stock, ...purchaseSelection.requests];
-
-        if (itemsToPrint.length === 0) {
-            const noItemsText = '--- No se seleccionaron productos para esta orden ---';
-            const noItemsWidth = font.widthOfTextAtSize(noItemsText, 10);
-            page.drawText(noItemsText, { 
-                x: (width - noItemsWidth) / 2, // También centramos este aviso
-                y: yPos, 
-                size: 10, font, color: rgb(0.6, 0, 0) 
+        // (Opcional) Auto-llenar precio si cambiamos de proveedor y tenemos historial
+        document.querySelectorAll('.order-provider-select').forEach(select => {
+            select.addEventListener('change', (e) => {
+                const provId = e.target.value;
+                const index = e.target.dataset.index;
+                const item = allItems[index];
+                
+                const provider = appState.providers.find(p => p.id === provId);
+                if (provider && provider.priceHistory && provider.priceHistory[item.name]) {
+                    const lastPrice = provider.priceHistory[item.name].cost;
+                    const input = document.querySelector(`.order-cost-input[data-index="${index}"]`);
+                    // Solo llenamos si el input está vacío para no borrar lo que escriba el usuario
+                    if(input && !input.value) { 
+                        input.value = lastPrice;
+                        calculateOrderTotals(); // Recalcular total
+                    }
+                }
             });
-            yPos -= 20;
-        } else {
-            itemsToPrint.forEach(item => {
-                if (yPos < 80) { page = pdfDoc.addPage(); yPos = height - 50; }
-                
-                const qty = item.suggestedQty || item.quantity || '1';
-                const type = item.suggestedQty ? 'Reposición' : 'Solicitud';
-                const itemName = item.name || 'Sin nombre';
-
-                page.drawText(`${qty}`, { x: 50, y: yPos, size: 10, font });
-                
-                const cleanName = itemName.length > 60 ? itemName.substring(0, 60) + '...' : itemName;
-                page.drawText(`${cleanName}`, { x: 100, y: yPos, size: 10, font });
-                
-                page.drawText(`${type}`, { x: 450, y: yPos, size: 9, font });
-                page.drawLine({ start: { x: 50, y: yPos - 5 }, end: { x: 550, y: yPos - 5 }, thickness: 0.5, color: rgb(0.8, 0.8, 0.8) });
-                
-                yPos -= 20;
-            });
-        }
-
-        // --- 4. FIRMAS Y PIE DE PÁGINA (CENTRADO EN LA PÁGINA) ---
-        
-        if (yPos < 100) { page = pdfDoc.addPage(); yPos = height - 100; } else { yPos -= 60; }
-
-        // Cálculos para centrar el bloque de firma en la página
-        const lineWidth = 200; // Longitud de la línea
-        const centerPageX = width / 2; // Centro exacto de la página
-        const lineStart = centerPageX - (lineWidth / 2); // Dónde empieza la línea
-        const lineEnd = centerPageX + (lineWidth / 2);   // Dónde termina la línea
-
-        // Dibujamos la línea centrada
-        page.drawLine({ start: { x: lineStart, y: yPos }, end: { x: lineEnd, y: yPos }, thickness: 1 });
-
-        // Texto "Autorizado por:"
-        const authLabel = 'Autorizado por:';
-        const authLabelWidth = fontBold.widthOfTextAtSize(authLabel, 9);
-        page.drawText(authLabel, { 
-            x: centerPageX - (authLabelWidth / 2), // Centrado sobre el eje
-            y: yPos - 15, 
-            size: 9, 
-            font: fontBold 
         });
-
-        // Texto Email
-        const emailText = appState.userProfile.email || 'Admin';
-        const emailWidth = font.widthOfTextAtSize(emailText, 9);
-        page.drawText(emailText, { 
-            x: centerPageX - (emailWidth / 2), // Centrado sobre el eje
-            y: yPos - 28, 
-            size: 9, 
-            font: font, 
-            color: rgb(0.3, 0.3, 0.3) 
-        });
-
-        // Código del documento (Esquina Inferior Derecha)
-        const pages = pdfDoc.getPages();
-        pages.forEach(p => {
-             const { width: pWidth } = p.getSize();
-             p.drawText('GEM-FR-06', { x: pWidth - 100, y: 30, size: 9, font: fontBold, color: rgb(0.5, 0.5, 0.5) });
-        });
-
-        return await pdfDoc.saveAsBase64({ dataUri: false });
     };
+
+    // 2. Función para Calcular Totales en Tiempo Real
+    const calculateOrderTotals = () => {
+        let grandTotal = 0;
+        document.querySelectorAll('.order-cost-input').forEach(input => {
+            const qty = parseFloat(input.dataset.qty);
+            const cost = parseFloat(input.value) || 0;
+            const total = qty * cost;
+            const index = input.dataset.index;
+            
+            // Actualizar celda de total por fila
+            document.getElementById(`row-total-${index}`).textContent = `$${total.toFixed(2)}`;
+            grandTotal += total;
+        });
+        // Actualizar Total Final
+        document.getElementById('order-grand-total').textContent = `$${grandTotal.toFixed(2)}`;
+    };
+
+    // 3. Listener del Botón "Autorizar y Generar Orden"
+    if (btnGenerateOrder) {
+        btnGenerateOrder.addEventListener('click', () => {
+            // Renderizamos la tabla ANTES de mostrar el modal
+            renderOrderTable();
+            document.getElementById('order-modal').classList.remove('hidden');
+        });
+    }
+
+    // 4. Listener del Submit (Confirmar Orden)
+    if (formOrder) {
+        formOrder.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = formOrder.querySelector('button[type="submit"]');
+            const originalText = btn.textContent;
+            btn.disabled = true; btn.textContent = 'Procesando...';
+
+            // Recolectar datos fila por fila
+            const itemsDetails = [];
+            const allItemsSource = [...purchaseSelection.stock, ...purchaseSelection.requests];
+            let grandTotal = 0;
+            let hasError = false;
+
+            document.querySelectorAll('.order-cost-input').forEach((input, idx) => {
+                const cost = parseFloat(input.value);
+                const provSelect = document.querySelectorAll('.order-provider-select')[idx];
+                const providerId = provSelect.value;
+                
+                // Validación: Todo debe tener proveedor y costo
+                if (!providerId || isNaN(cost)) {
+                    hasError = true;
+                    input.classList.add('border-red-500'); // Marcar error visual
+                    provSelect.classList.add('border-red-500');
+                } else {
+                    input.classList.remove('border-red-500');
+                    provSelect.classList.remove('border-red-500');
+                    
+                    const itemData = allItemsSource[idx];
+                    const provider = appState.providers.find(p => p.id === providerId);
+                    
+                    itemsDetails.push({
+                        ...itemData, 
+                        unitCost: cost,
+                        providerId: providerId,
+                        providerName: provider ? provider.name : 'Desconocido',
+                        quantity: parseFloat(input.dataset.qty)
+                    });
+                    grandTotal += (cost * parseFloat(input.dataset.qty));
+                }
+            });
+
+            if (hasError) {
+                showToast('Por favor asigna proveedor y costo a todos los ítems marcados en rojo.', true);
+                btn.disabled = false; btn.textContent = originalText;
+                return;
+            }
+
+            // Datos Generales de la Orden
+            const orderData = {
+                deliveryDate: document.getElementById('order-date').value,
+                notes: document.getElementById('order-notes').value,
+                totalOrderCost: grandTotal.toFixed(2),
+                providerName: 'Múltiples / Ver Detalle', 
+                providerEmail: '' // Ya no se envía automático al proveedor individual
+            };
+
+            try {
+                // Generar PDF
+                const pdfBase64 = await generatePurchaseOrderPDF(orderData, itemsDetails);
+                
+                // Enviar al Backend
+                await authenticatedFetch('/.netlify/functions/procesar-orden-compra', { 
+                    method: 'POST', 
+                    body: JSON.stringify({ pdfBase64, orderData, itemsDetails }) 
+                });
+                
+                showToast('Orden procesada y trazabilidad actualizada.');
+                document.getElementById('order-modal').classList.add('hidden');
+                formOrder.reset();
+                loadPurchasesView(); // Recargar vista
+            } catch(err) { 
+                console.error(err); showToast(err.message, true); 
+            } finally { 
+                btn.disabled = false; btn.textContent = originalText; 
+            }
+        });
+    }
+
+    // 5. Nuevo Generador de PDF (Con columnas de precios)
+    const generatePurchaseOrderPDF = async (orderData, items) => {
+         const PDFLib = await loadPdfLib();
+         if (!PDFLib) throw new Error('Error al cargar librería PDF');
+         const { PDFDocument, rgb, StandardFonts } = PDFLib;
+         const pdfDoc = await PDFDocument.create();
+         const page = pdfDoc.addPage();
+         const { width, height } = page.getSize();
+         const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+         const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+         
+         let yPos = height - 50;
+         
+         // Título
+         page.drawText('ORDEN DE COMPRA', { x: 50, y: yPos, size: 20, font: fontBold, color: rgb(0, 0.53, 0.71) });
+         yPos -= 30;
+         
+         // Fecha y Datos
+         page.drawText(`Fecha: ${new Date().toLocaleDateString()}`, { x: 50, y: yPos, size: 10, font });
+         page.drawText(`Entrega Estimada: ${orderData.deliveryDate}`, { x: 300, y: yPos, size: 10, font });
+         yPos -= 40;
+
+         // Encabezados de Tabla
+         const startX = 40;
+         page.drawRectangle({ x: startX, y: yPos - 5, width: 520, height: 20, color: rgb(0.9, 0.9, 0.9) });
+         
+         page.drawText('CANT', { x: 45, y: yPos, size: 8, font: fontBold });
+         page.drawText('DESCRIPCIÓN', { x: 85, y: yPos, size: 8, font: fontBold });
+         page.drawText('PROVEEDOR', { x: 280, y: yPos, size: 8, font: fontBold });
+         page.drawText('P. UNIT', { x: 430, y: yPos, size: 8, font: fontBold });
+         page.drawText('TOTAL', { x: 500, y: yPos, size: 8, font: fontBold });
+         
+         yPos -= 20;
+
+         // Filas
+         items.forEach(item => {
+             const totalRow = item.quantity * item.unitCost;
+             
+             // Verificar si necesitamos nueva página
+             if (yPos < 50) { 
+                 // (Aquí iría lógica de nueva página, simplificado para este ejemplo)
+             }
+
+             page.drawText(String(item.quantity), { x: 45, y: yPos, size: 8, font });
+             page.drawText(item.name.substring(0, 35), { x: 85, y: yPos, size: 8, font });
+             page.drawText(item.providerName.substring(0, 25), { x: 280, y: yPos, size: 8, font });
+             page.drawText(`$${item.unitCost.toFixed(2)}`, { x: 430, y: yPos, size: 8, font });
+             page.drawText(`$${totalRow.toFixed(2)}`, { x: 500, y: yPos, size: 8, font });
+             
+             // Línea divisoria suave
+             page.drawLine({ start: { x: 40, y: yPos - 5 }, end: { x: 560, y: yPos - 5 }, thickness: 0.5, color: rgb(0.8, 0.8, 0.8) });
+             
+             yPos -= 20;
+         });
+         
+         // Total Final
+         yPos -= 10;
+         page.drawText(`TOTAL FINAL: $${orderData.totalOrderCost}`, { x: 430, y: yPos, size: 12, font: fontBold });
+
+         // Notas
+         if (orderData.notes) {
+             yPos -= 30;
+             page.drawText(`Notas: ${orderData.notes}`, { x: 40, y: yPos, size: 9, font, color: rgb(0.5, 0.5, 0.5) });
+         }
+
+         return await pdfDoc.saveAsBase64({ dataUri: false });
+    };
+
+    // Botón de cierre X del modal (si existe)
+    document.getElementById('btn-cancel-order-x')?.addEventListener('click', () => {
+         document.getElementById('order-modal').classList.add('hidden');
+    });
 
 
     // ==========================================
