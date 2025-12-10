@@ -770,7 +770,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 4. Listener del Submit (Confirmar Orden)
+    // 4. Listener del Submit (Confirmar Orden) - VERSIÓN CORREGIDA Y BLINDADA
     if (formOrder) {
         formOrder.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -778,21 +778,50 @@ document.addEventListener('DOMContentLoaded', () => {
             const originalText = btn.textContent;
             btn.disabled = true; btn.textContent = 'Procesando...';
 
-            // Recolectar datos fila por fila
+            // --- PARCHE DE SEGURIDAD 1: Validar Inputs Fijos ---
+            // Esto evita el error "Cannot read properties of null" si el HTML no cargó bien
+            const dateEl = document.getElementById('order-date');
+            const notesEl = document.getElementById('order-notes');
+
+            if (!dateEl) {
+                console.error("ERROR CRÍTICO: No se encuentra el input 'order-date' en el HTML.");
+                showToast("Error de sistema: Faltan campos en el formulario. Recarga la página.", true);
+                btn.disabled = false; btn.textContent = originalText;
+                return;
+            }
+            // ----------------------------------------------------
+
+            // Recolectar datos fila por fila con validación extra
             const itemsDetails = [];
             const allItemsSource = [...purchaseSelection.stock, ...purchaseSelection.requests];
             let grandTotal = 0;
             let hasError = false;
 
-            document.querySelectorAll('.order-cost-input').forEach((input, idx) => {
+            const costInputs = document.querySelectorAll('.order-cost-input');
+            const provSelects = document.querySelectorAll('.order-provider-select');
+
+            // --- PARCHE DE SEGURIDAD 2: Validar Tabla ---
+            if (costInputs.length === 0 || costInputs.length !== provSelects.length) {
+                console.error(`Desfase en tabla: Inputs=${costInputs.length}, Selects=${provSelects.length}`);
+                showToast("Error al leer la tabla de precios. Intenta abrir el modal de nuevo.", true);
+                btn.disabled = false; btn.textContent = originalText;
+                return;
+            }
+            // ---------------------------------------------
+
+            costInputs.forEach((input, idx) => {
                 const cost = parseFloat(input.value);
-                const provSelect = document.querySelectorAll('.order-provider-select')[idx];
+                const provSelect = provSelects[idx]; // Acceso seguro por índice
+                
+                // Protección extra por si un selector falló
+                if (!provSelect) return; 
+                
                 const providerId = provSelect.value;
                 
                 // Validación: Todo debe tener proveedor y costo
                 if (!providerId || isNaN(cost)) {
                     hasError = true;
-                    input.classList.add('border-red-500'); // Marcar error visual
+                    input.classList.add('border-red-500'); 
                     provSelect.classList.add('border-red-500');
                 } else {
                     input.classList.remove('border-red-500');
@@ -801,14 +830,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     const itemData = allItemsSource[idx];
                     const provider = appState.providers.find(p => p.id === providerId);
                     
-                    itemsDetails.push({
-                        ...itemData, 
-                        unitCost: cost,
-                        providerId: providerId,
-                        providerName: provider ? provider.name : 'Desconocido',
-                        quantity: parseFloat(input.dataset.qty)
-                    });
-                    grandTotal += (cost * parseFloat(input.dataset.qty));
+                    // Protección por si el array de datos origen no coincide
+                    if (itemData) {
+                        itemsDetails.push({
+                            ...itemData, 
+                            unitCost: cost,
+                            providerId: providerId,
+                            providerName: provider ? provider.name : 'Desconocido',
+                            quantity: parseFloat(input.dataset.qty)
+                        });
+                        grandTotal += (cost * parseFloat(input.dataset.qty));
+                    }
                 }
             });
 
@@ -818,13 +850,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // Datos Generales de la Orden
+            // Datos Generales de la Orden (Usando las referencias seguras de arriba)
             const orderData = {
-                deliveryDate: document.getElementById('order-date').value,
-                notes: document.getElementById('order-notes').value,
+                deliveryDate: dateEl.value, 
+                notes: notesEl ? notesEl.value : '', // Si notesEl no existe, manda string vacío
                 totalOrderCost: grandTotal.toFixed(2),
                 providerName: 'Múltiples / Ver Detalle', 
-                providerEmail: '' // Ya no se envía automático al proveedor individual
+                providerEmail: '' 
             };
 
             try {
@@ -840,9 +872,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 showToast('Orden procesada y trazabilidad actualizada.');
                 document.getElementById('order-modal').classList.add('hidden');
                 formOrder.reset();
-                loadPurchasesView(); // Recargar vista
+                loadPurchasesView(); 
             } catch(err) { 
-                console.error(err); showToast(err.message, true); 
+                console.error("Error en proceso de compra:", err); 
+                showToast(err.message, true); 
             } finally { 
                 btn.disabled = false; btn.textContent = originalText; 
             }
