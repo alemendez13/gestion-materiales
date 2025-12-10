@@ -1656,4 +1656,44 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // --- LÓGICA DE RECHAZO DE BORRADOR ---
+    const btnReject = document.getElementById('btn-reject-order');
+    if (btnReject) {
+        btnReject.addEventListener('click', async () => {
+            if (!currentDraftId) return;
+            
+            if (!confirm('¿Estás seguro de que deseas RECHAZAR esta solicitud? Se notificará al solicitante.')) return;
+
+            const originalText = btnReject.textContent;
+            btnReject.disabled = true;
+            btnReject.textContent = "Rechazando...";
+
+            try {
+                // Reutilizamos 'actualizar-solicitud' o creamos uno simple. 
+                // Para no complicarte creando archivos, usaremos un truco:
+                // Llamamos a 'procesar-orden-compra' pero enviando un flag de rechazo
+                // O MEJOR: Crea un archivo rápido 'rechazar-borrador.js' (Ver abajo)
+                
+                await authenticatedFetch('/.netlify/functions/rechazar-borrador', {
+                    method: 'POST',
+                    body: JSON.stringify({ draftId: currentDraftId })
+                });
+
+                showToast('Solicitud rechazada correctamente.', true);
+                document.getElementById('order-modal').classList.add('hidden');
+                formOrder.reset();
+                currentDraftId = null;
+                window.location.hash = '';
+                loadPurchasesView();
+
+            } catch (error) {
+                console.error(error);
+                showToast('Error al rechazar: ' + error.message, true);
+            } finally {
+                btnReject.disabled = false;
+                btnReject.textContent = originalText;
+            }
+        });
+    }
+
 });
