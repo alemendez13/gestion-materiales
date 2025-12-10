@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let purchaseSelection = { stock: [], requests: [] }; // Estado local de compras
     let purchaseDataCache = null;
-    let currentDraftId = null; // <--- AGREGAR ESTA LÍNEA
+    let currentDraftId = null; 
 
     // --- ELEMENTOS DEL DOM ---
     const loginView = document.getElementById('login-view');
