@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let purchaseSelection = { stock: [], requests: [] }; // Estado local de compras
     let purchaseDataCache = null;
+    let currentDraftId = null; // <--- AGREGAR ESTA LÍNEA
 
     // --- ELEMENTOS DEL DOM ---
     const loginView = document.getElementById('login-view');
@@ -130,18 +131,30 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
 
     const bootstrapApp = async () => {
-        const urlToken = getUrlToken();
+        const hash = window.location.hash;
+        
+        // 1. Verificar si es un Link de Login (Token de sesión)
+        if (hash.includes('token=')) {
+            const token = getUrlToken(); // Tu función auxiliar existente
+            await handleTokenVerification(token);
+            return;
+        }
 
-        if (urlToken) {
-            await handleTokenVerification(urlToken);
-        } else {
-            const session = getSessionFromStorage();
-            if (session) {
-                appState.userProfile = session;
-                await initializeApp();
-            } else {
-                showLoginView();
+        // 2. Verificar Sesión Normal
+        const session = getSessionFromStorage();
+        if (session) {
+            appState.userProfile = session;
+            await initializeApp();
+
+            // 3. NUEVO: Verificar si es un Link de Aprobación (Después de iniciar sesión)
+            if (hash.includes('approve=')) {
+                const draftId = hash.split('approve=')[1];
+                if (draftId) {
+                    await handleApprovalLink(draftId);
+                }
             }
+        } else {
+            showLoginView();
         }
     };
 
@@ -779,58 +792,43 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 4. Listener del Submit (Confirmar Orden) - VERSIÓN CORREGIDA Y BLINDADA
+    // 4. Listener INTELIGENTE del Submit (Pedir Aprobación o Finalizar)
     if (formOrder) {
         formOrder.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const btn = formOrder.querySelector('button[type="submit"]');
-            const originalText = btn.textContent;
-            btn.disabled = true; btn.textContent = 'Procesando...';
+            const btn = document.getElementById('btn-submit-order'); // Ojo con el ID nuevo
+            const btnText = document.getElementById('btn-submit-text');
+            const originalText = btnText.textContent;
+            
+            btn.disabled = true; btnText.textContent = 'Procesando...';
 
-            // --- PARCHE DE SEGURIDAD 1: Validar Inputs Fijos ---
-            // Esto evita el error "Cannot read properties of null" si el HTML no cargó bien
+            // --- Validaciones de Seguridad (Igual que antes) ---
             const dateEl = document.getElementById('order-date');
             const notesEl = document.getElementById('order-notes');
+            const costInputs = document.querySelectorAll('.order-cost-input');
+            const provSelects = document.querySelectorAll('.order-provider-select');
 
-            if (!dateEl) {
-                console.error("ERROR CRÍTICO: No se encuentra el input 'order-date' en el HTML.");
-                showToast("Error de sistema: Faltan campos en el formulario. Recarga la página.", true);
-                btn.disabled = false; btn.textContent = originalText;
+            if (!dateEl || costInputs.length === 0) {
+                showToast("Error de formulario. Recarga la página.", true);
+                btn.disabled = false; btnText.textContent = originalText;
                 return;
             }
-            // ----------------------------------------------------
 
-            // Recolectar datos fila por fila con validación extra
+            // Recolectar datos
             const itemsDetails = [];
             const allItemsSource = [...purchaseSelection.stock, ...purchaseSelection.requests];
             let grandTotal = 0;
             let hasError = false;
 
-            const costInputs = document.querySelectorAll('.order-cost-input');
-            const provSelects = document.querySelectorAll('.order-provider-select');
-
-            // --- PARCHE DE SEGURIDAD 2: Validar Tabla ---
-            if (costInputs.length === 0 || costInputs.length !== provSelects.length) {
-                console.error(`Desfase en tabla: Inputs=${costInputs.length}, Selects=${provSelects.length}`);
-                showToast("Error al leer la tabla de precios. Intenta abrir el modal de nuevo.", true);
-                btn.disabled = false; btn.textContent = originalText;
-                return;
-            }
-            // ---------------------------------------------
-
             costInputs.forEach((input, idx) => {
                 const cost = parseFloat(input.value);
-                const provSelect = provSelects[idx]; // Acceso seguro por índice
-                
-                // Protección extra por si un selector falló
-                if (!provSelect) return; 
-                
+                const provSelect = provSelects[idx];
+                if (!provSelect) return;
                 const providerId = provSelect.value;
-                
-                // Validación: Todo debe tener proveedor y costo
+
                 if (!providerId || isNaN(cost)) {
                     hasError = true;
-                    input.classList.add('border-red-500'); 
+                    input.classList.add('border-red-500');
                     provSelect.classList.add('border-red-500');
                 } else {
                     input.classList.remove('border-red-500');
@@ -839,10 +837,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     const itemData = allItemsSource[idx];
                     const provider = appState.providers.find(p => p.id === providerId);
                     
-                    // Protección por si el array de datos origen no coincide
                     if (itemData) {
                         itemsDetails.push({
-                            ...itemData, 
+                            ...itemData,
                             unitCost: cost,
                             providerId: providerId,
                             providerName: provider ? provider.name : 'Desconocido',
@@ -854,39 +851,59 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (hasError) {
-                showToast('Por favor asigna proveedor y costo a todos los ítems marcados en rojo.', true);
-                btn.disabled = false; btn.textContent = originalText;
+                showToast('Completa los campos marcados en rojo.', true);
+                btn.disabled = false; btnText.textContent = originalText;
                 return;
             }
 
-            // Datos Generales de la Orden (Usando las referencias seguras de arriba)
             const orderData = {
-                deliveryDate: dateEl.value, 
-                notes: notesEl ? notesEl.value : '', // Si notesEl no existe, manda string vacío
+                deliveryDate: dateEl.value,
+                notes: notesEl ? notesEl.value : '',
                 totalOrderCost: grandTotal.toFixed(2),
-                providerName: 'Múltiples / Ver Detalle', 
-                providerEmail: '' 
+                providerName: 'Múltiples / Ver Detalle',
+                providerEmail: ''
             };
 
             try {
-                // Generar PDF
-                const pdfBase64 = await generatePurchaseOrderPDF(orderData, itemsDetails);
+                // --- DECISIÓN CRÍTICA: ¿SOY SOLICITANTE O APROBADOR? ---
                 
-                // Enviar al Backend
-                await authenticatedFetch('/.netlify/functions/procesar-orden-compra', { 
-                    method: 'POST', 
-                    body: JSON.stringify({ pdfBase64, orderData, itemsDetails }) 
-                });
-                
-                showToast('Orden procesada y trazabilidad actualizada.');
+                if (currentDraftId) {
+                    // MODO APROBACIÓN: Generamos PDF y cerramos el ciclo
+                    const pdfBase64 = await generatePurchaseOrderPDF(orderData, itemsDetails);
+                    
+                    await authenticatedFetch('/.netlify/functions/procesar-orden-compra', { 
+                        method: 'POST', 
+                        body: JSON.stringify({ 
+                            pdfBase64, 
+                            orderData, 
+                            itemsDetails,
+                            draftId: currentDraftId // Enviamos el ID para cerrar el borrador
+                        }) 
+                    });
+                    showToast('¡Orden Aprobada y Enviada!');
+                    
+                    // Limpieza total
+                    currentDraftId = null;
+                    window.location.hash = ''; // Limpiar URL
+                    
+                } else {
+                    // MODO SOLICITUD: Guardamos borrador y avisamos al jefe
+                    await authenticatedFetch('/.netlify/functions/solicitar-aprobacion', {
+                        method: 'POST',
+                        body: JSON.stringify({ orderData, itemsDetails })
+                    });
+                    showToast('Solicitud enviada a Aprobación.');
+                }
+
+                // Cierre común
                 document.getElementById('order-modal').classList.add('hidden');
                 formOrder.reset();
-                loadPurchasesView(); 
+                loadPurchasesView();
+
             } catch(err) { 
-                console.error("Error en proceso de compra:", err); 
-                showToast(err.message, true); 
+                console.error(err); showToast(err.message, true); 
             } finally { 
-                btn.disabled = false; btn.textContent = originalText; 
+                btn.disabled = false; btnText.textContent = originalText; 
             }
         });
     }
@@ -1581,4 +1598,62 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     bootstrapApp();
+
+    const handleApprovalLink = async (draftId) => {
+        showToast("Cargando solicitud para aprobación...", false);
+        try {
+            // 1. Obtener datos del borrador
+            const data = await authenticatedFetch('/.netlify/functions/obtener-borrador', {
+                method: 'POST',
+                body: JSON.stringify({ draftId })
+            });
+
+            // 2. Configurar el estado global con los datos recibidos
+            // Esto "engaña" a la app para que crea que el usuario seleccionó estos ítems manualmente
+            purchaseSelection.stock = [];
+            purchaseSelection.requests = [];
+            
+            // Reconstruimos la selección basada en los datos guardados
+            data.itemsDetails.forEach(item => {
+                if (item.type === 'SOLICITUD') purchaseSelection.requests.push(item);
+                else purchaseSelection.stock.push(item);
+            });
+
+            // 3. Preparar el Modal para Aprobación
+            currentDraftId = draftId; // IMPORTANTE: Activa el modo aprobación
+            
+            // Cambiar textos y botones visualmente
+            document.getElementById('btn-submit-text').textContent = "Autorizar y Finalizar";
+            document.getElementById('btn-submit-order').className = "px-6 py-2 bg-green-700 text-white hover:bg-green-800 rounded-md shadow-sm font-medium flex items-center";
+            document.getElementById('btn-reject-order').classList.remove('hidden'); // Mostrar botón rechazar
+            
+            // Pre-llenar campos fijos
+            document.getElementById('order-date').value = data.orderData.deliveryDate;
+            document.getElementById('order-notes').value = data.orderData.notes;
+
+            // 4. Renderizar y Mostrar
+            renderOrderTable(); // Esto usará purchaseSelection que acabamos de llenar
+            
+            // TRUCO: Llenar los inputs de la tabla con los valores guardados
+            setTimeout(() => {
+                const inputs = document.querySelectorAll('.order-cost-input');
+                const selects = document.querySelectorAll('.order-provider-select');
+                
+                data.itemsDetails.forEach((item, idx) => {
+                    if(inputs[idx]) {
+                        inputs[idx].value = item.unitCost;
+                        inputs[idx].dispatchEvent(new Event('input')); // Recalcular total
+                    }
+                    if(selects[idx]) selects[idx].value = item.providerId;
+                });
+            }, 200); // Dar tiempo al renderizado
+
+            document.getElementById('order-modal').classList.remove('hidden');
+
+        } catch (error) {
+            console.error(error);
+            showToast("Error al cargar la solicitud: " + error.message, true);
+        }
+    };
+
 });

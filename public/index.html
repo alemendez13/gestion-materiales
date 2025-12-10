@@ -397,57 +397,77 @@
                     </section>
 
                     <div id="order-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden flex items-center justify-center z-50">
-    <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div class="flex justify-between items-center mb-4 border-b pb-2">
-            <h3 class="text-xl font-bold text-gray-800">Generar Orden de Compra</h3>
-            <button type="button" id="btn-cancel-order-x" class="text-gray-500 hover:text-gray-700">
-                <span class="material-icons">close</span>
-            </button>
-        </div>
+                                <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+                                    <div class="flex justify-between mt-4 pt-4 border-t">
+                                                            <button type="button" id="btn-reject-order" class="hidden px-4 py-2 text-red-600 hover:bg-red-50 border border-red-200 rounded-md font-medium">
+                                                                <span class="material-icons text-sm mr-1">block</span> Rechazar Solicitud
+                                                            </button>
 
-        <form id="order-details-form">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 bg-gray-50 p-3 rounded">
-                <div>
-                    <label for="order-date" class="block text-xs font-bold text-gray-700 uppercase">Fecha Entrega Estimada</label>
-                    <input type="date" id="order-date" required class="mt-1 block w-full border border-gray-300 rounded-md p-1 text-sm">
-                </div>
-                <div>
-                    <label for="order-notes" class="block text-xs font-bold text-gray-700 uppercase">Notas Globales</label>
-                    <input type="text" id="order-notes" class="mt-1 block w-full border border-gray-300 rounded-md p-1 text-sm" placeholder="Ej. Entrega en Almacén B">
-                </div>
-            </div>
+                                                            <div class="flex space-x-3 ml-auto">
+                                                                <button type="button" id="btn-cancel-order" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md border">Cancelar</button>
+                                                                <button type="submit" id="btn-submit-order" class="px-6 py-2 bg-green-600 text-white hover:bg-green-700 rounded-md shadow-sm font-medium flex items-center">
+                                                                    <span class="material-icons text-sm mr-2">send</span> <span id="btn-submit-text">Solicitar Aprobación</span>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        ```
 
-            <div class="overflow-x-auto mb-4 border rounded-md">
-                <table class="w-full text-left text-sm" id="order-items-table">
-                    <thead class="bg-gray-100 text-gray-600 uppercase text-xs">
-                        <tr>
-                            <th class="p-2">Ítem</th>
-                            <th class="p-2 text-center" width="80">Cant.</th>
-                            <th class="p-2" width="250">Proveedor Asignado</th>
-                            <th class="p-2" width="120">Costo Unit. ($)</th>
-                            <th class="p-2 text-right" width="120">Total ($)</th>
-                        </tr>
-                    </thead>
-                    <tbody id="order-items-body" class="divide-y divide-gray-200">
-                        </tbody>
-                    <tfoot class="bg-gray-50 font-bold">
-                        <tr>
-                            <td colspan="4" class="p-3 text-right">TOTAL ESTIMADO:</td>
-                            <td class="p-3 text-right text-blue-600" id="order-grand-total">$0.00</td>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
+                                            ---
 
-            <div class="flex justify-end space-x-3 mt-4">
-                <button type="button" id="btn-cancel-order" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md border">Cancelar</button>
-                <button type="submit" class="px-6 py-2 bg-green-600 text-white hover:bg-green-700 rounded-md shadow-sm font-medium flex items-center">
-                    <span class="material-icons text-sm mr-2">check_circle</span> Confirmar y Generar
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
+                                            ### PASO 4: LA LÓGICA INTELIGENTE (Frontend JS)
+
+                                            Aquí ocurre la magia. Vamos a modificar `script.js` para que sepa si estás creando una orden o aprobándola.
+
+                                            **Archivo:** `script.js`
+
+                                            **A. Variable Global Nueva**
+                                            Al inicio del archivo, donde está `appState`, agrega esta variable:
+                                            ```javascript
+                                            let currentDraftId = null; // Para saber si estamos en modo aprobación
+
+                                    <form id="order-details-form">
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 bg-gray-50 p-3 rounded">
+                                            <div>
+                                                <label for="order-date" class="block text-xs font-bold text-gray-700 uppercase">Fecha Entrega Estimada</label>
+                                                <input type="date" id="order-date" required class="mt-1 block w-full border border-gray-300 rounded-md p-1 text-sm">
+                                            </div>
+                                            <div>
+                                                <label for="order-notes" class="block text-xs font-bold text-gray-700 uppercase">Notas Globales</label>
+                                                <input type="text" id="order-notes" class="mt-1 block w-full border border-gray-300 rounded-md p-1 text-sm" placeholder="Ej. Entrega en Almacén B">
+                                            </div>
+                                        </div>
+
+                                        <div class="overflow-x-auto mb-4 border rounded-md">
+                                            <table class="w-full text-left text-sm" id="order-items-table">
+                                                <thead class="bg-gray-100 text-gray-600 uppercase text-xs">
+                                                    <tr>
+                                                        <th class="p-2">Ítem</th>
+                                                        <th class="p-2 text-center" width="80">Cant.</th>
+                                                        <th class="p-2" width="250">Proveedor Asignado</th>
+                                                        <th class="p-2" width="120">Costo Unit. ($)</th>
+                                                        <th class="p-2 text-right" width="120">Total ($)</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="order-items-body" class="divide-y divide-gray-200">
+                                                    </tbody>
+                                                <tfoot class="bg-gray-50 font-bold">
+                                                    <tr>
+                                                        <td colspan="4" class="p-3 text-right">TOTAL ESTIMADO:</td>
+                                                        <td class="p-3 text-right text-blue-600" id="order-grand-total">$0.00</td>
+                                                    </tr>
+                                                </tfoot>
+                                            </table>
+                                        </div>
+
+                                        <div class="flex justify-end space-x-3 mt-4">
+                                            <button type="button" id="btn-cancel-order" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md border"></button>
+                                            <button type="submit" class="px-6 py-2 bg-green-600 text-white hover:bg-green-700 rounded-md shadow-sm font-medium flex items-center">
+                                                <span class="material-icons text-sm mr-2">check_circle</span> Confirmar y Generar
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
 
                     <section id="inventory-view" class="view hidden">
                                             <h2 class="text-3xl font-semibold text-gray-700 mb-4">Inventario General</h2>
