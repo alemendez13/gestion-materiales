@@ -43,28 +43,31 @@ exports.handler = withAuth(async (event) => {
         const sheets = google.sheets({ version: 'v4', auth });
         const spreadsheetId = process.env.GOOGLE_SHEET_ID;
         const timestamp = new Date().toISOString();
+        const newResId = 'RES-' + new Date().getTime();
 
-        // 1. Crear el registro en la hoja de RESPONSIVAS
+        // --- INICIO MODIFICACIÓN: REORDENAMIENTO DE COLUMNAS ---
+        // Ajustado para coincidir con: ID | Fecha | ID_Activo | Nombre | Email | Condiciones | Autorizo
+        const valuesToAppend = [
+            [
+                newResId,          // Col A: ID_Responsiva
+                timestamp,         // Col B: Fecha
+                assetId,           // Col C: ID_Activo
+                responsibleName,   // Col D: Nombre_Responsable
+                responsibleEmail,  // Col E: Email_Responsable
+                conditions,        // Col F: Condiciones
+                userEmail          // Col G: Email_Autoriza
+            ]
+        ];
+        // --- FIN MODIFICACIÓN ---
+
         await sheets.spreadsheets.values.append({
             spreadsheetId,
-            range: 'RESPONSIVAS!A1', // Asegúrate de que esta hoja exista
+            range: 'RESPONSIVAS!A1',
             valueInputOption: 'USER_ENTERED',
-            resource: {
-                values: [
-                    [
-                        'RES-' + new Date().getTime(),
-                        timestamp,
-                        assetId,
-                        responsibleName,
-                        responsibleEmail,
-                        conditions,
-                        userEmail // Email del supervisor que autoriza (AHORA ES SEGURO)
-                    ]
-                ],
-            },
+            resource: { values: valuesToAppend },
         });
 
-        // 2. Crear el movimiento de SALIDA en el inventario
+        // Registrar salida en MOVIMIENTOS (Sin cambios)
         await sheets.spreadsheets.values.append({
             spreadsheetId,
             range: 'MOVIMIENTOS!A1',
@@ -73,22 +76,17 @@ exports.handler = withAuth(async (event) => {
                 values: [
                     [
                         'MOV-' + new Date().getTime(),
-                        timestamp,
-                        assetId,
-                        'Salida',
-                        1, // Los activos fijos siempre salen en cantidad de 1
-                        0, // El costo de salida es 0
-                        '', '', '', '', '',
-                        userEmail // Email del supervisor (AHORA ES SEGURO)
+                        timestamp, assetId, 'Salida', 1, 0,
+                        '', '', '', '', '', userEmail
                     ]
                 ],
             },
         });
 
-        return { statusCode: 200, body: JSON.stringify({ message: 'Responsiva generada y salida de inventario registrada con éxito.' }) };
+        return { statusCode: 200, body: JSON.stringify({ message: 'Responsiva generada exitosamente.' }) };
 
     } catch (error) {
-        console.error('Error al generar responsiva:', error);
-        return { statusCode: 500, body: JSON.stringify({ error: 'Error interno del servidor.' }) };
+        console.error('Error:', error);
+        return { statusCode: 500, body: JSON.stringify({ error: 'Error interno.' }) };
     }
 });

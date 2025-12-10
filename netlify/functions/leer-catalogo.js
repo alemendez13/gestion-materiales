@@ -1,8 +1,6 @@
 // RUTA: netlify/functions/leer-catalogo.js
 
 const { google } = require('googleapis');
-// NUEVO: Importar 'withAuth'
-// ANTIGUO: Ya no importamos 'getUserRole'
 const { withAuth } = require('./auth');
 
 const getAuth = () => {
@@ -15,44 +13,41 @@ const getAuth = () => {
     });
 };
 
-// MODIFICADO: Envolver con 'withAuth'
 exports.handler = withAuth(async (event) => {
-    
-    if (event.httpMethod !== 'POST') {
-        return { statusCode: 405, body: 'Method Not Allowed' };
-    }
-
-    // --- BLOQUE DE SEGURIDAD ANTIGUO ELIMINADO ---
-    // 'withAuth' maneja la validación de la sesión.
-    // Cualquier usuario logueado puede leer el catálogo.
+    if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method Not Allowed' };
 
     try {
         const auth = getAuth();
         const sheets = google.sheets({ version: 'v4', auth });
 
+        // --- INICIO MODIFICACIÓN: RANGO AMPLIADO ---
         const response = await sheets.spreadsheets.values.get({
             spreadsheetId: process.env.GOOGLE_SHEET_ID,
-            range: 'CATALOGO_INSUMOS!A:M', // Lee las columnas relevantes del catálogo
+            // Ahora leemos hasta la columna N para obtener el Proveedor Sugerido
+            range: 'CATALOGO_INSUMOS!A:N', 
         });
+        // --- FIN MODIFICACIÓN ---
 
         const rows = (response.data.values || []).slice(1);
 
-        // La lógica de mapeo es la misma que la original
         const catalog = rows.map(row => ({
-            id: row[1],          // B: ID_Insumo
-            sku: row[2],         // C: SKU
-            name: row[3],        // D: Nombre_Producto
-            description: row[4], // E: Descripcion
-            family: row[5],      // F: Familia
-            unit: row[6],        // G: Unidad_Medida
-            minStock: row[7],    // H: Stock_Minimo
-            isAsset: row[11]     // L: Es_Activo
+            id: row[1],
+            sku: row[2],
+            name: row[3],
+            description: row[4],
+            family: row[5],
+            unit: row[6],
+            minStock: row[7],
+            isAsset: row[11],
+            // --- INICIO MODIFICACIÓN: MAPEO NUEVO CAMPO ---
+            suggestedProvider: row[13] || '' // Columna N (índice 13)
+            // --- FIN MODIFICACIÓN ---
         }));
 
         return { statusCode: 200, body: JSON.stringify(catalog) };
 
     } catch (error) {
-        console.error('Error al leer el catálogo:', error);
-        return { statusCode: 500, body: JSON.stringify({ error: 'Error interno del servidor.' }) };
+        console.error('Error:', error);
+        return { statusCode: 500, body: JSON.stringify({ error: 'Error interno.' }) };
     }
 });
