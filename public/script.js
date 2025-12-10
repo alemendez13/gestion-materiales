@@ -668,7 +668,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // NUEVA LÓGICA DE COMPRAS (Reemplaza a la anterior)
     // =========================================================
 
-    // 1. Renderizar la Tabla Dinámica en el Modal
+    // 1. Renderizar la Tabla Dinámica en el Modal (VERSIÓN ESTABILIZADA)
     const renderOrderTable = () => {
         const tbody = document.getElementById('order-items-body');
         const grandTotalEl = document.getElementById('order-grand-total');
@@ -689,8 +689,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const row = document.createElement('tr');
             
             // INTELIGENCIA: Buscamos si este item tiene un proveedor sugerido en el catálogo
-            // (El backend ya nos manda 'suggestedProvider' en appState.catalog)
-            const catalogItem = appState.catalog.find(c => c.name === item.name); 
+            // Usamos una búsqueda insensible a mayúsculas/minúsculas para mayor robustez
+            const catalogItem = appState.catalog.find(c => c.name.toLowerCase() === item.name.toLowerCase()); 
             const suggestedProvName = catalogItem ? catalogItem.suggestedProvider : '';
             
             // Cantidad sugerida o solicitada
@@ -706,7 +706,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <select class="order-provider-select w-full border border-gray-300 rounded p-1 text-sm bg-white focus:ring-blue-500 focus:border-blue-500" data-index="${index}">
                         <option value="">-- Seleccionar --</option>
                         ${appState.providers.map(p => `
-                            <option value="${p.id}" ${p.name === suggestedProvName ? 'selected' : ''}>${p.name}</option>
+                            <option value="${p.id}" ${p.name.trim().toLowerCase() === suggestedProvName.trim().toLowerCase() ? 'selected' : ''}>${p.name}</option>
                         `).join('')}
                     </select>
                 </td>
@@ -718,30 +718,39 @@ document.addEventListener('DOMContentLoaded', () => {
             tbody.appendChild(row);
         });
 
-        // Agregamos listeners a los nuevos inputs para que calculen al escribir
-        document.querySelectorAll('.order-cost-input').forEach(input => {
-            input.addEventListener('input', calculateOrderTotals);
-        });
-        
-        // (Opcional) Auto-llenar precio si cambiamos de proveedor y tenemos historial
-        document.querySelectorAll('.order-provider-select').forEach(select => {
-            select.addEventListener('change', (e) => {
-                const provId = e.target.value;
-                const index = e.target.dataset.index;
-                const item = allItems[index];
-                
-                const provider = appState.providers.find(p => p.id === provId);
-                if (provider && provider.priceHistory && provider.priceHistory[item.name]) {
-                    const lastPrice = provider.priceHistory[item.name].cost;
-                    const input = document.querySelector(`.order-cost-input[data-index="${index}"]`);
-                    // Solo llenamos si el input está vacío para no borrar lo que escriba el usuario
-                    if(input && !input.value) { 
-                        input.value = lastPrice;
-                        calculateOrderTotals(); // Recalcular total
+        // --- MEJORA DE ESTABILIDAD: Esperar un ciclo de renderizado ---
+        setTimeout(() => {
+            // 1. Listeners de cálculo (costo)
+            document.querySelectorAll('.order-cost-input').forEach(input => {
+                input.addEventListener('input', calculateOrderTotals);
+            });
+            
+            // 2. Listeners de cambio de proveedor + Auto-llenado inteligente
+            document.querySelectorAll('.order-provider-select').forEach(select => {
+                select.addEventListener('change', (e) => {
+                    const provId = e.target.value;
+                    const index = e.target.dataset.index;
+                    const item = allItems[index];
+                    
+                    const provider = appState.providers.find(p => p.id === provId);
+                    // Lógica de historial de precios
+                    if (provider && provider.priceHistory && provider.priceHistory[item.name]) {
+                        const lastPrice = provider.priceHistory[item.name].cost;
+                        const input = document.querySelector(`.order-cost-input[data-index="${index}"]`);
+                        if(input && !input.value) { 
+                            input.value = lastPrice;
+                            calculateOrderTotals(); 
+                        }
                     }
+                });
+
+                // Disparar evento 'change' manualmente si ya hay un proveedor pre-seleccionado (Sugerido)
+                // Esto hará que se busque su precio histórico automáticamente al abrir el modal
+                if (select.value) {
+                    select.dispatchEvent(new Event('change'));
                 }
             });
-        });
+        }, 50); // 50ms de retraso es imperceptible para el ojo humano pero una eternidad para el CPU
     };
 
     // 2. Función para Calcular Totales en Tiempo Real
