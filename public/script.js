@@ -1121,29 +1121,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     // --- FIN MODIFICACIÓN FASE 2 ---
     
-    // Purchase Order Form
-    if (formOrder) {
-        formOrder.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const btn = formOrder.querySelector('button[type="submit"]');
-            btn.disabled = true; btn.textContent = 'Procesando...';
-            const orderData = {
-                providerId: document.getElementById('provider-select').value,
-                providerName: document.getElementById('provider-search-input').value,
-                providerEmail: document.getElementById('provider-email-display').textContent,
-                totalCost: document.getElementById('order-cost').value,
-                deliveryDate: document.getElementById('order-date').value,
-                notes: document.getElementById('order-notes').value
-            };
-            try {
-                const pdfBase64 = await generatePurchaseOrderPDF(orderData);
-                await authenticatedFetch('/.netlify/functions/procesar-orden-compra', { method: 'POST', body: JSON.stringify({ pdfBase64, orderData, selectedRequests: purchaseSelection.requests }) });
-                showToast('Orden procesada'); modalOrder.classList.add('hidden'); formOrder.reset(); loadPurchasesView();
-            } catch(err) { console.error(err); showToast(err.message, true); }
-            finally { btn.disabled = false; btn.textContent = 'Confirmar Orden'; }
-        });
-    }
-    
     // Provider Form
     if (formProv) {
         formProv.addEventListener('submit', async (e) => {
