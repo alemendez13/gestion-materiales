@@ -2,6 +2,8 @@
 
 const { google } = require('googleapis');
 const { withAuth } = require('./auth');
+// NUEVO: Importamos el helper
+const { getSheetWithHeaders, getValue } = require('./utils/sheet-helper');
 
 const getAuth = () => {
     return new google.auth.GoogleAuth({
@@ -20,28 +22,29 @@ exports.handler = withAuth(async (event) => {
         const auth = getAuth();
         const sheets = google.sheets({ version: 'v4', auth });
 
-        // --- INICIO MODIFICACIÓN: RANGO AMPLIADO ---
-        const response = await sheets.spreadsheets.values.get({
-            spreadsheetId: process.env.GOOGLE_SHEET_ID,
-            // Ahora leemos hasta la columna N para obtener el Proveedor Sugerido
-            range: 'CATALOGO_INSUMOS!A:N', 
-        });
-        // --- FIN MODIFICACIÓN ---
-
-        const rows = (response.data.values || []).slice(1);
+        // --- USANDO EL NUEVO HELPER ---
+        // Leemos hasta la Z para asegurar que traemos columnas futuras
+        const { rows, map } = await getSheetWithHeaders(
+            sheets, 
+            process.env.GOOGLE_SHEET_ID, 
+            'CATALOGO_INSUMOS!A:Z' 
+        );
 
         const catalog = rows.map(row => ({
-            id: row[1],
-            sku: row[2],
-            name: row[3],
-            description: row[4],
-            family: row[5],
-            unit: row[6],
-            minStock: row[7],
-            isAsset: row[11],
-            // --- INICIO MODIFICACIÓN: MAPEO NUEVO CAMPO ---
-            suggestedProvider: row[13] || '' // Columna N (índice 13)
-            // --- FIN MODIFICACIÓN ---
+            // Ahora accedemos por NOMBRE DE COLUMNA, no por número.
+            // Los nombres deben coincidir con la fila 1 de tu Excel (sin importar mayúsculas)
+            id: getValue(row, map, 'id_insumo'),           // Antes row[1]
+            sku: getValue(row, map, 'sku'),                 // Antes row[2]
+            name: getValue(row, map, 'nombre_producto'),    // Antes row[3]
+            description: getValue(row, map, 'descripcion'), // Antes row[4]
+            family: getValue(row, map, 'familia'),          // Antes row[5]
+            unit: getValue(row, map, 'unidad_medida'),      // Antes row[6]
+            minStock: getValue(row, map, 'stock_minimo'),   // Antes row[7]
+            isAsset: getValue(row, map, 'es_activo'),       // Antes row[11]
+            
+            // Aquí estaba el riesgo: row[13]. Ahora está blindado.
+            // Si mueves la columna "Proveedor_Sugerido" a la columna Z, esto seguirá funcionando.
+            suggestedProvider: getValue(row, map, 'proveedor_sugerido') 
         }));
 
         return { statusCode: 200, body: JSON.stringify(catalog) };
