@@ -1,67 +1,54 @@
 // RUTA: netlify/functions/crear-insumo.js
 
-const { google } = require('googleapis');
-// NUEVO: Importar 'withAuth'
+// NOTA: Ya no necesitamos importar 'google' aquí directamente, ni definir getAuth.
 const { withAuth } = require('./auth');
+// IMPORTAMOS NUESTRA NUEVA UTILIDAD
+const { getSheetsClient } = require('./utils/google-client');
+// IMPORTAMOS EL HELPER DE HOJAS (Fase 1.2 que hicimos antes)
+const { getSheetWithHeaders, getValue } = require('./utils/sheet-helper');
 
-const getAuth = () => new google.auth.GoogleAuth({
-    credentials: {
-        client_email: process.env.GOOGLE_CLIENT_EMAIL,
-        private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-    },
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-});
-
-// MODIFICADO: Envolver con 'withAuth'
 exports.handler = withAuth(async (event) => {
     
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' };
     }
 
-    // --- BLOQUE DE SEGURIDAD ANTIGUO ELIMINADO ---
-    // La 'x-api-key' ha sido reemplazada por 'withAuth'
-
     try { 
         const item = JSON.parse(event.body);
-
-        // --- INICIO LÓGICA DE AUTENTICACIÓN MEJORADA ---
-        const userRole = event.auth.role; // Rol confiable del token
+        const userRole = event.auth.role; 
 
         if (userRole !== 'admin') {
-            return { statusCode: 403, body: JSON.stringify({ error: 'Acceso denegado. No tienes permisos de administrador.' }) };
+            return { statusCode: 403, body: JSON.stringify({ error: 'Acceso denegado.' }) };
         }
-        // --- FIN LÓGICA DE AUTENTICACIÓN ---
     
         if (!item.sku || !item.name || !item.family) {
-            return { statusCode: 400, body: JSON.stringify({ error: 'SKU, Nombre y Familia son obligatorios.' }) };
+            return { statusCode: 400, body: JSON.stringify({ error: 'Faltan datos obligatorios.' }) };
         }
 
-        const auth = getAuth();
-        const sheets = google.sheets({ version: 'v4', auth });
+        // --- AQUÍ ESTÁ LA MAGIA DE LA REFACTORIZACIÓN ---
+        // Una sola línea para obtener el cliente listo
+        const sheets = getSheetsClient(); 
+        // -----------------------------------------------
 
-        // --- LÓGICA ANTI-DUPLICADOS (Se mantiene del original) ---
-        
-        // 1. Leer la columna de SKUs (Columna C)
-        const catalogResponse = await sheets.spreadsheets.values.get({
-            spreadsheetId: process.env.GOOGLE_SHEET_ID,
-            range: 'CATALOGO_INSUMOS!C:C', 
+        // VALIDACIÓN DE DUPLICADOS MEJORADA (Usando sheet-helper)
+        const { rows, map } = await getSheetWithHeaders(
+            sheets, 
+            process.env.GOOGLE_SHEET_ID, 
+            'CATALOGO_INSUMOS!A:C' // Solo necesitamos hasta SKU
+        );
+
+        // Buscamos en la columna 'sku' usando el mapa dinámico
+        const skuExists = rows.some(row => {
+            const rowSku = getValue(row, map, 'sku');
+            return rowSku.trim().toLowerCase() === item.sku.trim().toLowerCase();
         });
 
-        const allSkus = (catalogResponse.data.values || []).flat(); 
-
-        // 2. Comprobar si el nuevo SKU ya existe
-        if (allSkus.some(sku => sku.trim().toLowerCase() === item.sku.trim().toLowerCase())) {
-            return { 
-                statusCode: 400,
-                body: JSON.stringify({ error: 'El SKU ingresado ya existe. No se puede duplicar.' }) 
-            };
+        if (skuExists) {
+            return { statusCode: 400, body: JSON.stringify({ error: 'El SKU ya existe.' }) };
         }
-        // --- FIN LÓGICA ANTI-DUPLICADOS ---
         
         const newItemId = 'INS-' + new Date().getTime();
 
-        // --- LÓGICA DE PREVENCIÓN DE INYECCIÓN (Se mantiene del original) ---
         await sheets.spreadsheets.values.append({
             spreadsheetId: process.env.GOOGLE_SHEET_ID,
             range: 'CATALOGO_INSUMOS!A1',
@@ -69,19 +56,20 @@ exports.handler = withAuth(async (event) => {
             resource: {
                 values: [
                     [
-                        '',                 // A: Folio
-                        newItemId,          // B: ID_INSUMO
-                        "'" + item.sku,     // C: SKU (AÑADE COMILLA)
-                        "'" + item.name,    // D: Nombre_Producto (AÑADE COMILLA)
-                        "'" + item.description, // E: Descripcion (AÑADE COMILLA)
-                        "'" + item.family,  // F: Familia (AÑADE COMILLA)
-                        "'" + item.unit,    // G: Unidad_Medida (AÑADE COMILLA)
-                        item.minStock,      // H: Stock_Minimo
-                        item.maxStock,      // I: Stock_Maximo
-                        "'" + item.location,// J: Ubicacion (AÑADE COMILLA)
-                        'Activo',           // K: Estatus
-                        item.isAsset || false, // L: Es_Activo
-                        "'" + item.serialNumber // M: N_Serie (AÑADE COMILLA)
+                        '',                 
+                        newItemId,          
+                        "'" + item.sku,     
+                        "'" + item.name,    
+                        "'" + item.description, 
+                        "'" + item.family,  
+                        "'" + item.unit,    
+                        item.minStock,      
+                        item.maxStock,      
+                        "'" + item.location,
+                        'Activo',           
+                        item.isAsset || false, 
+                        "'" + item.serialNumber,
+                        '' // Proveedor Sugerido (Vacio al crear)
                     ]
                 ],
             },

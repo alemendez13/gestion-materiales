@@ -1,15 +1,10 @@
 // RUTA: netlify/functions/solicitar-aprobacion.js
-const { google } = require('googleapis');
+
 const nodemailer = require('nodemailer');
 const { withAuth } = require('./auth');
+// IMPORTAMOS EL CLIENTE CENTRALIZADO
+const { getSheetsClient } = require('./utils/google-client');
 
-const getAuth = () => new google.auth.GoogleAuth({
-    credentials: {
-        client_email: process.env.GOOGLE_CLIENT_EMAIL,
-        private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-    },
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-});
 
 const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
@@ -29,8 +24,7 @@ exports.handler = withAuth(async (event) => {
         const draftId = 'DRAFT-' + Date.now();
         
         // 2. Guardar en Sheets (ORDENES_BORRADOR)
-        const auth = getAuth();
-        const sheets = google.sheets({ version: 'v4', auth });
+        const sheets = getSheetsClient();
         
         // Guardamos todo el detalle como un texto JSON en la columna B
         const jsonContent = JSON.stringify({ orderData, itemsDetails });

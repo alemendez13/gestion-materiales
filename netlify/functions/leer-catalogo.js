@@ -1,26 +1,16 @@
 // RUTA: netlify/functions/leer-catalogo.js
 
-const { google } = require('googleapis');
 const { withAuth } = require('./auth');
+// IMPORTAMOS EL CLIENTE CENTRALIZADO
+const { getSheetsClient } = require('./utils/google-client');
 // NUEVO: Importamos el helper
 const { getSheetWithHeaders, getValue } = require('./utils/sheet-helper');
-
-const getAuth = () => {
-    return new google.auth.GoogleAuth({
-        credentials: {
-            client_email: process.env.GOOGLE_CLIENT_EMAIL,
-            private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-        },
-        scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-    });
-};
 
 exports.handler = withAuth(async (event) => {
     if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method Not Allowed' };
 
     try {
-        const auth = getAuth();
-        const sheets = google.sheets({ version: 'v4', auth });
+        const sheets = getSheetsClient();
 
         // --- USANDO EL NUEVO HELPER ---
         // Leemos hasta la Z para asegurar que traemos columnas futuras

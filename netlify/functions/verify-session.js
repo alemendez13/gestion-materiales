@@ -1,19 +1,9 @@
 // RUTA: netlify/functions/verify-session.js
 
-const { google } = require('googleapis');
 const { getUserRole } = require('./auth');
 // NUEVO: Importar uuid para crear el nuevo token de sesión
 const { v4: uuidv4 } = require('uuid'); 
-
-const getAuth = () => {
-    return new google.auth.GoogleAuth({
-        credentials: {
-            client_email: process.env.GOOGLE_CLIENT_EMAIL,
-            private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-        },
-        scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-    });
-};
+const { getSheetsClient } = require('./utils/google-client');
 
 exports.handler = async (event) => {
     
@@ -28,8 +18,7 @@ exports.handler = async (event) => {
             return { statusCode: 400, body: JSON.stringify({ error: 'Token requerido.' }) };
         }
 
-        const auth = getAuth();
-        const sheets = google.sheets({ version: 'v4', auth });
+        const sheets = getSheetsClient();
         const spreadsheetId = process.env.GOOGLE_SHEET_ID;
         const range = 'LOGIN_TOKENS!A:C';
 

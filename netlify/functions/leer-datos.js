@@ -1,20 +1,8 @@
 // RUTA: netlify/functions/leer-datos.js
 
-const { google } = require('googleapis');
-// NUEVO: Importamos el envoltorio de autenticación 'withAuth'
-// ANTIGUO: Ya no importamos 'getUserRole' directamente aquí.
 const { withAuth } = require('./auth');
-
-const getAuth = () => {
-    return new google.auth.GoogleAuth({
-        credentials: {
-            client_email: process.env.GOOGLE_CLIENT_EMAIL,
-            private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-        },
-        // Esta función solo lee, así que 'readonly' es correcto y seguro.
-        scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-    });
-};
+// IMPORTAMOS EL CLIENTE CENTRALIZADO
+const { getSheetsClient } = require('./utils/google-client');
 
 // MODIFICADO: Envolvemos la función con 'withAuth'
 exports.handler = withAuth(async (event) => {
@@ -39,8 +27,7 @@ exports.handler = withAuth(async (event) => {
         
         // --- FIN DE LA LÓGICA DE AUTENTICACIÓN ---
 
-        const auth = getAuth();
-        const sheets = google.sheets({ version: 'v4', auth });
+        const sheets = getSheetsClient();
 
         const response = await sheets.spreadsheets.values.get({
             spreadsheetId: process.env.GOOGLE_SHEET_ID,

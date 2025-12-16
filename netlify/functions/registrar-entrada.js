@@ -1,16 +1,8 @@
 // RUTA: netlify/functions/registrar-entrada.js
 
-const { google } = require('googleapis');
-// NUEVO: Importar 'withAuth'
 const { withAuth } = require('./auth');
-
-const getAuth = () => new google.auth.GoogleAuth({
-    credentials: {
-        client_email: process.env.GOOGLE_CLIENT_EMAIL,
-        private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-    },
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-});
+// IMPORTAMOS EL CLIENTE CENTRALIZADO
+const { getSheetsClient } = require('./utils/google-client');
 
 // MODIFICADO: Envolver con 'withAuth'
 exports.handler = withAuth(async (event) => {
@@ -52,8 +44,7 @@ exports.handler = withAuth(async (event) => {
         }
         // --- FIN DE LA VALIDACIÓN "BLINDADA" ---
 
-        const auth = getAuth();
-        const sheets = google.sheets({ version: 'v4', auth });
+        const sheets = getSheetsClient();
         const spreadsheetId = process.env.GOOGLE_SHEET_ID;
         const timestamp = new Date().toISOString();
 

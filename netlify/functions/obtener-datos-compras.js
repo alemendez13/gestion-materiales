@@ -1,15 +1,8 @@
 // RUTA: netlify/functions/obtener-datos-compras.js
 
-const { google } = require('googleapis');
 const { withAuth } = require('./auth');
-
-const getAuth = () => new google.auth.GoogleAuth({
-    credentials: {
-        client_email: process.env.GOOGLE_CLIENT_EMAIL,
-        private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-    },
-    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-});
+// IMPORTAMOS EL CLIENTE CENTRALIZADO
+const { getSheetsClient } = require('./utils/google-client');
 
 exports.handler = withAuth(async (event) => {
     if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method Not Allowed' };
@@ -20,8 +13,7 @@ exports.handler = withAuth(async (event) => {
     }
 
     try {
-        const auth = getAuth();
-        const sheets = google.sheets({ version: 'v4', auth });
+        const sheets = getSheetsClient();
         const spreadsheetId = process.env.GOOGLE_SHEET_ID;
 
         // 1. Leer Catálogo, Lotes, No Perecederos y Solicitudes de Compra

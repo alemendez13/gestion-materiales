@@ -1,21 +1,11 @@
 // RUTA: netlify/functions/request-login.js
 
-const { google } = require('googleapis');
+// IMPORTAMOS EL CLIENTE CENTRALIZADO
+const { getSheetsClient } = require('./utils/google-client');
 const nodemailer = require('nodemailer');
 const { v4: uuidv4 } = require('uuid');
 const { getUserRole } = require('./auth'); // Reutilizamos el módulo de autenticación
 
-// Configuración del cliente de Google (con permisos de ESCRITURA)
-const getAuth = () => {
-    return new google.auth.GoogleAuth({
-        credentials: {
-            client_email: process.env.GOOGLE_CLIENT_EMAIL,
-            private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-        },
-        // ¡Importante! Se necesitan permisos de escritura para la hoja de tokens.
-        scopes: ['https://www.googleapis.com/auth/spreadsheets'], 
-    });
-};
 
 // Configuración de Nodemailer (la misma que ya tenías)
 const transporter = nodemailer.createTransport({
@@ -61,8 +51,7 @@ exports.handler = async (event) => {
         const expirationTime = new Date(Date.now() + 15 * 60 * 1000); // 15 minutos desde ahora
 
         // 3. Guardar el token en la hoja 'LOGIN_TOKENS'
-        const auth = getAuth();
-        const sheets = google.sheets({ version: 'v4', auth });
+        const sheets = getSheetsClient();
         
         await sheets.spreadsheets.values.append({
             spreadsheetId: process.env.GOOGLE_SHEET_ID,

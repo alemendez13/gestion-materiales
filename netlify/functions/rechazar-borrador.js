@@ -1,11 +1,9 @@
-const { google } = require('googleapis');
+
 const nodemailer = require('nodemailer');
 const { withAuth } = require('./auth');
+// IMPORTAMOS EL CLIENTE CENTRALIZADO
+const { getSheetsClient } = require('./utils/google-client');
 
-const getAuth = () => new google.auth.GoogleAuth({
-    credentials: { client_email: process.env.GOOGLE_CLIENT_EMAIL, private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n') },
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-});
 
 const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST, port: process.env.SMTP_PORT, secure: true,
@@ -16,8 +14,7 @@ exports.handler = withAuth(async (event) => {
     if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method Not Allowed' };
     try {
         const { draftId } = JSON.parse(event.body);
-        const auth = getAuth();
-        const sheets = google.sheets({ version: 'v4', auth });
+        const sheets = getSheetsClient();
         
         // 1. Buscar Borrador para obtener email del solicitante
         const res = await sheets.spreadsheets.values.get({
