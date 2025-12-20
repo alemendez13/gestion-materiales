@@ -153,6 +153,30 @@ document.addEventListener('DOMContentLoaded', () => {
                     await handleApprovalLink(draftId);
                 }
             }
+
+            // 4. NUEVO (Fase 3.3): Verificar si es un Link de Rechazo Directo
+            if (hash.includes('reject=')) {
+                const draftId = hash.split('reject=')[1];
+                if (draftId) {
+                    // Limpiamos el hash para evitar ejecuciones dobles
+                    history.pushState("", document.title, window.location.pathname + window.location.search);
+                    
+                    if (confirm(`¿Estás seguro de que deseas RECHAZAR la solicitud ${draftId}? Se notificará al usuario.`)) {
+                         try {
+                            showToast("Procesando rechazo...", false);
+                            await authenticatedFetch('/.netlify/functions/rechazar-borrador', {
+                                method: 'POST',
+                                body: JSON.stringify({ draftId })
+                            });
+                            showToast('Solicitud rechazada correctamente.');
+                         } catch (error) {
+                            console.error(error);
+                            showToast('Error al rechazar: ' + error.message, true);
+                         }
+                    }
+                }
+            }
+
         } else {
             showLoginView();
         }
@@ -1039,7 +1063,7 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         // ... Lógica de envío de solicitud ...
         // (Simplificada aquí para brevedad, usar la lógica original)
-        const payload = { id: 'SOL-'+Date.now(), timestamp: new Date().toISOString(), email: appState.userProfile.email, item: newItemSelect.value, quantity: document.getElementById('quantity-input').value };
+        const payload = { id: 'SOL-'+Date.now(), timestamp: new Date().toISOString(), email: appState.userProfile.email, itemId: newItemSelect.value, quantity: document.getElementById('quantity-input').value };
         try { await authenticatedFetch('/.netlify/functions/guardar-datos', { method:'POST', body:JSON.stringify(payload)}); showToast('Enviado'); newRequestForm.reset(); appState.requests = await authenticatedFetch('/.netlify/functions/leer-datos', {method:'POST'}); renderUserRequestsTable(appState.requests); showView('dashboard-view'); } catch(e){ showToast(e.message, true); }
     });
 
