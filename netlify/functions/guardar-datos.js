@@ -20,7 +20,7 @@ exports.handler = withAuth(async (event) => {
         }
 
         // Validaciones básicas
-        if (!item.itemName || !item.quantity) {
+        if (!item.itemId || !item.quantity) {
             return { statusCode: 400, body: JSON.stringify({ error: 'Faltan datos obligatorios.' }) };
         }
 
